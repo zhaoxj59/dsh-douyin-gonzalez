@@ -12,9 +12,10 @@
 //   POST /api/config { config: {...} } -> normalized + atomic write +
 //          immediate read-back verification (see lib/config.mjs).
 //   GET  /api/status  -> today's counts (reply/like/comment/share/post)
-//   POST /api/health  -> run the 12 health checks (lib/health.mjs):
+//   POST /api/health  -> run the 13 health checks (lib/health.mjs):
 //          returns { ok, passed, failed, unknown, total, summary, checks }
 //          Edge 登录那项真的去探一次；探不到报 unknown，不假装通过。
+//          playwright 没装时 Edge 那项带中文原因 + 修法。
 // No credentials, no Douyin login data, no cookies pass through here.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -95,9 +96,12 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/login/open') {
     // Browser open needs Playwright + Edge; do it lazily so the settings
     // server still starts on a machine without them.
+    // v0.3.2: playwright 没装时返回中文原因 + 修法（error + fix），
+    // 不只剩 "Cannot find package 'playwright'" 一句英文。
     import('../lib/browser.mjs').then(async (b) => {
-      try { json(res, 200, await b.openLogin()); } catch (e) { json(res, 500, { ok: false, message: e.message }); }
-    }).catch((e) => json(res, 500, { ok: false, message: e.message }));
+      try { json(res, 200, await b.openLogin()); }
+      catch (e) { const f = b.toFriendlyBrowserError(e); json(res, 500, { ...f, fix: f.fix }); }
+    }).catch((e) => json(res, 500, { ok: false, error: 'browser-error', message: e.message, fix: '' }));
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/risk/clear') {

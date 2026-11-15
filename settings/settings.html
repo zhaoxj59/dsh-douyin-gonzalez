@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>刷抖音 · 设置（自写插件 v0.3.1）</title>
+<title>刷抖音 · 设置（自写插件 v0.3.2）</title>
 <style>
   :root { --blue:#2563eb; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --card:#fff; --bg:#f3f4f6; --red:#b91c1c; --amber:#b45309; --green:#15803d; }
   * { box-sizing: border-box; }
@@ -62,11 +62,12 @@
 </style>
 </head>
 <body>
-<header><h1>🐋 刷抖音 · 设置 <span style="opacity:.8;font-size:13px">v0.3.1 · 5 个包</span></h1>
-<p>自写插件 dsh-douyin-gonzalez。每个包一个总开关，关了就不加载、不跑定时器。所有写动作默认全关。改完点“保存全部设置”，只勾不保存 = 没保存。</p></header>
+<header><h1>🐋 刷抖音 · 设置 <span style="opacity:.8;font-size:13px">v0.3.2 · 5 个包</span></h1>
+<p>自写插件 dsh-douyin-gonzalez。每个包一个总开关，关了就不加载、不跑定时器。所有写动作默认全关。改完自动保存（500ms 防抖），顶部会写“已自动保存 HH:MM:SS”；“保存全部设置”按钮还在，自动保存失败时点它手动存。</p></header>
 
 <nav class="sticky-nav" id="stickyNav">
   <span class="nav-label">📑 目录</span>
+  <button type="button" data-nav="login">🔑 登录抖音</button>
   <button type="button" data-nav="core">🎯 核心包</button>
   <button type="button" data-nav="interact">💬 互动包 · 点赞评论</button>
   <button type="button" data-nav="discover">🔍 发现包</button>
@@ -100,8 +101,14 @@
 <!-- ============ 核心 ============ -->
 <div class="pane active" id="pane-core">
   <p class="pkg-purpose">🎯 核心包会干什么：只负责刷抖音和回白名单私信——看片、选片、回私信、写日报，别的什么都不动。</p>
+  <div class="section" id="loginSection"><h2>🔑 登录抖音</h2>
+    <p class="muted">先登录再刷：没登录时刷、私信、读列表全都干不了。点下面按钮在 Edge 里扫码登录；登录掉了这里会红字提醒。</p>
+    <div id="loginBoxCore">…</div>
+    <button id="loginBtnCore" type="button">打开 Edge 登录抖音</button>
+    <div id="loginHelpCore" class="danger" style="white-space:pre-wrap;margin-top:8px"></div>
+  </div>
   <div class="section"><h2>🩺 一键体检</h2>
-    <p class="muted">真跑 12 项检查：Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控。跑完直接写通过几项、不通过哪几项，不通过的会写原因。</p>
+    <p class="muted">真跑 13 项检查：Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控、大肥鱼记忆互通。跑完直接写通过几项、不通过哪几项，不通过的会写原因。</p>
     <button id="healthBtn" type="button">▶ 运行一键体检</button>
     <div id="healthSummary">还没体检。点上面按钮开始，跑完这里会写：通过几项、不通过哪几项。</div>
     <div id="healthList"></div>
@@ -137,7 +144,7 @@
     <div class="field"><label><input type="checkbox" id="cfg-packages-interact-enabled"> 开启互动包（默认关闭）</label><span class="muted">关了下面所有互动工具都不跑。</span></div>
   </div>
   <div class="budget-zone" data-pack="interact"><h2>💰 每日预算 · 单独看这里</h2>
-    <p class="muted">下面全是每天次数，大数字，改一次就生效（要点“保存全部设置”）。开关在各小节里，次数只在这里改，别处没有。</p>
+    <p class="muted">下面全是每天次数，大数字，改一次自动保存（半秒后存）。开关在各小节里，次数只在这里改，别处没有。</p>
     <div class="budget-row"><label>自行评论</label><input type="number" id="cfg-autoComment-perDay" min="0" max="50" value="3"><span>条 / 天</span></div>
     <div class="budget-row"><label>自行点赞</label><input type="number" id="cfg-autoLike-perDay" min="0" max="200" value="10"><span>次 / 天</span></div>
     <div class="budget-row"><label>评论 @ 人</label><input type="number" id="cfg-commentMention-perDay" min="0" max="20" value="3"><span>条 / 天</span></div>
@@ -283,7 +290,15 @@ function activateTab(name) {
   document.getElementById('pane-' + name).scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => activateTab(t.dataset.tab)));
-document.querySelectorAll('#stickyNav [data-nav]').forEach((b) => b.addEventListener('click', () => activateTab(b.dataset.nav)));
+// 目录条：点“登录抖音”先跳核心包，再滑到登录那节。
+document.querySelectorAll('#stickyNav [data-nav]').forEach((b) => b.addEventListener('click', () => {
+  if (b.dataset.nav === 'login') {
+    activateTab('core');
+    setTimeout(() => document.getElementById('loginSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } else {
+    activateTab(b.dataset.nav);
+  }
+}));
 
 // 开关门控次数框：开关关着，对应的每日次数框置灰、点不动。
 const DEP_MAP = [
@@ -324,7 +339,38 @@ function updateBudgetTotal() {
   const total = num('cfg-caps-totalOutwardPerDay', 20);
   el.innerHTML = `开着的对外动作每日合计：<b>${sum}</b> 次 / 总闸 <b>${total}</b> 次${sum > total ? ' <span class="over">⚠️ 已超总闸，体检会报不通过</span>' : ' ✅ 没超'}`;
 }
-document.addEventListener('change', (e) => { if (e.target?.type === 'checkbox' || e.target?.type === 'number') applyDep(); });
+document.addEventListener('change', (e) => { if (e.target?.type === 'checkbox' || e.target?.type === 'number') applyDep(); scheduleAutoSave(); });
+// v0.3.2 自动保存：开关 / 数字一改就自动存（500ms 防抖），不用再点
+// “保存全部设置”。存成功顶部写“已自动保存 HH:MM:SS”，失败写红字
+// 原因，“保存全部设置”按钮留着当手动兜底。加载完成前不自动存。
+let loaded = false;
+let autoSaveTimer = null;
+function scheduleAutoSave() {
+  if (!loaded) return;
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(autoSaveNow, 500);
+}
+async function autoSaveNow() {
+  const items = [...allowed.values()].map((a) => ({ id: a.id, name: a.name, kind: a.kind, interests: a.interests || [] }));
+  const cfg = readConfigFromPage();
+  try {
+    const [allowedRes, configRes] = await Promise.all([
+      fetch('/api/allowed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed: items }) }).then((r) => r.json()),
+      fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) }).then((r) => r.json()),
+    ]);
+    const now = new Date();
+    const stamp = [now.getHours(), now.getMinutes(), now.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+    if (allowedRes.ok && configRes.ok) {
+      setStatus(`✅ 已自动保存 ${stamp}：许可名单 ${allowedRes.readBack.allowed.length} 人，配置已从文件读回核对。`);
+    } else {
+      setStatus(`❌ 自动保存失败 ${stamp}：名单 ${allowedRes.ok ? 'OK' : (allowedRes.message || '失败')}；配置 ${configRes.ok ? 'OK' : (configRes.message || '失败')}。点“保存全部设置”手动存一次，或看服务器终端。`);
+    }
+  } catch (e) {
+    setStatus(`❌ 自动保存失败：${e.message}。点“保存全部设置”手动存一次。`);
+  }
+}
+// 打字（兴趣、名字、数字）也触发自动保存，同样防抖 500ms。
+document.addEventListener('input', (e) => { if (e.target?.matches('input[type=text], input[type=number], input[type=time]')) scheduleAutoSave(); });
 
 async function runHealth() {
   const btn = document.getElementById('healthBtn');
@@ -440,6 +486,15 @@ function writeConfigToPage(c) {
   document.getElementById('loginBox').innerHTML = login.loggedIn === false
     ? '<p class="danger">❌ 抖音未登录：请点“重新扫码登录”，在 Edge 里扫码 / 过验证码。</p>'
     : `<p class="muted">登录状态：${login.loggedIn === true ? '已登录' : '未检查（用 dy_login_status 查一次）'}${login.lastCheckedAt ? `，上次检查 ${login.lastCheckedAt}` : ''}</p>`;
+  // v0.3.2: 核心包顶上的登录节，和安全包里的登录状态是同一份数据。
+  const coreLogin = document.getElementById('loginBoxCore');
+  if (coreLogin) {
+    coreLogin.innerHTML = login.loggedIn === false
+      ? '<p class="danger">❌ 抖音未登录：点下面“打开 Edge 登录抖音”，在 Edge 里扫码 / 过验证码。</p>'
+      : login.loggedIn === true
+        ? `<p class="muted">✅ 已登录${login.lastCheckedAt ? `，上次检查 ${login.lastCheckedAt}` : ''}。可以刷了。</p>`
+        : '<p class="muted">❓ 未检查：点下面按钮打开 Edge 登录，或用 dy_login_status 查一次。</p>';
+  }
   const risk = c.risk || {};
   const riskEl = document.getElementById('cardRisk');
   riskEl.textContent = risk.paused ? '⏸️ 已暂停' : '✅ 正常';
@@ -469,7 +524,8 @@ async function load() {
   }
   writeConfigToPage(config);
   render();
-  setStatus(`已加载：${chats.length} 个会话，许可名单里 ${allowed.size} 人。\n上次保存：${allowedRes.updatedAt || '（从未保存）'}\n改完必须点“保存全部设置”，只勾不保存 = 没保存，重启后会丢。`);
+  loaded = true;
+  setStatus(`已加载：${chats.length} 个会话，许可名单里 ${allowed.size} 人。\n上次保存：${allowedRes.updatedAt || '（从未保存）'}\n现在是改完自动保存，改完等半秒，顶部会写“已自动保存 HH:MM:SS”。`);
 }
 
 function render() {
@@ -489,7 +545,7 @@ function render() {
     cb.addEventListener('change', () => {
       if (cb.checked) allowed.set(c.id, { id: c.id, name: c.name, kind: c.kind, interests: allowed.get(c.id)?.interests || [] });
       else allowed.delete(c.id);
-      setStatus(`已勾选 ${allowed.size} 人 —— 还没保存！点“保存全部设置”才算数。`);
+      scheduleAutoSave();
     });
     const label = document.createElement('label');
     label.htmlFor = cb.id;
@@ -501,6 +557,7 @@ function render() {
     interests.addEventListener('input', () => {
       const cur = allowed.get(c.id);
       if (cur) cur.interests = interests.value.split(/[,，、]/).map((s) => s.trim()).filter(Boolean);
+      scheduleAutoSave();
     });
     row.appendChild(cb); row.appendChild(label); row.appendChild(interests);
     if (!c.stableId) {
@@ -541,13 +598,27 @@ document.getElementById('addBtn').addEventListener('click', () => {
   allowed.set(id, { id, name, kind: 'dm', interests });
   if (!chats.some((c) => c.id === id)) chats.push({ id, name, kind: 'dm', lastMessage: '', stableId: false });
   render();
-  setStatus(`已把 ${name} 加入勾选（还没保存，点“保存全部设置”才算数）。`);
+  setStatus(`已把 ${name} 加入勾选，正在自动保存…`);
+  scheduleAutoSave();
 });
-document.getElementById('reloginBtn').addEventListener('click', async () => {
+// v0.3.2 登录：核心包顶上的“打开 Edge 登录抖音”和安全包里的
+// “重新扫码登录”调同一个接口。失败时显示中文原因 + 修法
+// （playwright 没装时那份），不只剩英文原文。
+async function openLogin() {
+  const help = document.getElementById('loginHelpCore');
+  if (help) help.textContent = '';
   setStatus('正在打开 Edge 登录窗口…（请在 Edge 里扫码）');
   const r = await fetch('/api/login/open', { method: 'POST' }).then((x) => x.json()).catch(() => ({ ok: false, message: '接口没通' }));
-  setStatus(r.ok ? '已打开 Edge，请在窗口里扫码登录，登录完点“刷新列表”。' : `打开失败：${r.message || ''}`);
-});
+  if (r.ok) {
+    setStatus('已打开 Edge，请在窗口里扫码登录，登录完点“刷新列表”。');
+  } else {
+    const detail = [r.message || '', r.fix || ''].filter(Boolean).join('\n');
+    setStatus(`打开失败：${detail}`);
+    if (help) help.textContent = detail;
+  }
+}
+document.getElementById('loginBtnCore').addEventListener('click', openLogin);
+document.getElementById('reloginBtn').addEventListener('click', openLogin);
 document.getElementById('clearRiskBtn').addEventListener('click', async () => {
   const r = await fetch('/api/risk/clear', { method: 'POST' }).then((x) => x.json()).catch(() => ({ ok: false }));
   setStatus(r.ok ? '✅ 风控暂停已解除。先确认 Edge 里没事再继续用写动作。' : '解除失败，请看服务器终端。');

@@ -1,4 +1,4 @@
-// Self-check v0.3.1 (no DSH, no Douyin login, no network needed).
+// Self-check v0.3.2 (no DSH, no Douyin login, no network needed).
 // Verifies: manifest + patch + entry exports, the 32 tools in 5 packages,
 // settings page (5 tabs + top status cards + all new sections),
 // config v4 defaults + round-trip + v2/v3 migration, allowed.json v2,
@@ -23,7 +23,7 @@ function check(name, ok, detail = '') {
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 check('package.json name', pkg.name === 'dsh-douyin-gonzalez', pkg.name);
-check('package.json version 0.3.1', pkg.version === '0.3.1', pkg.version);
+check('package.json version 0.3.2', pkg.version === '0.3.2', pkg.version);
 check('package.json type module', pkg.type === 'module');
 check('dsh.bundle.patch points at cordis.bundle.yml', pkg.dsh?.bundle?.patch === './cordis.bundle.yml');
 check('dsh.client platform web', pkg.dsh?.client?.platform === 'web');
@@ -32,6 +32,7 @@ check('engines.node >= 22.13', typeof pkg.engines?.node === 'string' && pkg.engi
 check('exports "." -> dsh-plugin.mjs', pkg.exports?.['.'] === './dsh-plugin.mjs');
 check('exports "./client" -> client.js', pkg.exports?.['./client'] === './client.js');
 check('playwright dependency present', Boolean(pkg.dependencies?.playwright));
+check('package.json has repository/homepage/bugs for npm publish', pkg.repository?.url === 'https://github.com/zhaoxj59/dsh-douyin-gonzalez.git' && pkg.homepage === 'https://github.com/zhaoxj59/dsh-douyin-gonzalez' && typeof pkg.bugs?.url === 'string');
 
 const patch = fs.readFileSync(path.join(ROOT, 'cordis.bundle.yml'), 'utf8');
 check('cordis.bundle.yml inserts douyin-gonzalez', patch.includes('douyin-gonzalez') && patch.includes('- insert:'));
@@ -44,8 +45,8 @@ const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stra
   'dy_like', 'dy_comment', 'dy_comment_mention', 'dy_share', 'dy_favorite', 'dy_sticker', 'dy_collect_sticker', 'dy_spark', 'dy_reply_own_comments',
   'dy_hot', 'dy_search', 'dy_following', 'dy_creator_videos', 'dy_diagnose_creator', 'dy_my_posts', 'dy_watch_sources',
   'dy_post', 'dy_publish_draft', 'dy_comfyui_latest',
-  'dy_patrol', 'dy_login_status', 'dy_cleanup', 'dy_memory', 'dy_risk_status', 'dy_analyze_video'];
-check('32 tools defined', entry.TOOL_DEFINITIONS?.length === 32, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
+  'dy_patrol', 'dy_login_status', 'dy_cleanup', 'dy_memory', 'dy_risk_status', 'dy_analyze_video', 'dy_fish_share'];
+check('33 tools defined', entry.TOOL_DEFINITIONS?.length === 33, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
 for (const want of ALL_TOOLS) check(`tool ${want} exists`, entry.TOOL_DEFINITIONS.some((t) => t.name === want));
 for (const [tool, pkgName] of [['dy_like', 'interact'], ['dy_hot', 'discover'], ['dy_post', 'publish'], ['dy_patrol', 'safety'], ['dy_watch', 'core']]) {
   check(`tool ${tool} gated by package ${pkgName}`, entry.TOOL_DEFINITIONS.find((t) => t.name === tool)?.pkg === pkgName);
@@ -64,13 +65,19 @@ check('dy_post requires file', (() => {
   const fakeCtx = { tools: { register: (tool) => registered.push(tool.name) } };
   await entry.apply(fakeCtx, { dataDir: path.join(os.tmpdir(), 'dy-gonzalez-selfcheck') });
   check('tool dy_health_check gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_health_check')?.pkg === 'core');
-check('apply() registers 32 tools on fake ctx.tools', registered.length === 32, registered.join(', '));
+check('apply() registers 33 tools on fake ctx.tools', registered.length === 33, registered.join(', '));
+check('dy_fish_share is gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_fish_share')?.pkg === 'core');
 }
 
 const html = fs.readFileSync(path.join(ROOT, 'settings', 'settings.html'), 'utf8');
 check('settings page has real checkboxes', html.includes("cb.type = 'checkbox'"));
 check('settings page has explicit Save button', html.includes('保存全部设置'));
-check('settings page does NOT rely on auto-save alone', html.includes('只勾不保存'));
+check('settings page auto-saves (500ms debounce) + keeps Save as manual fallback', html.includes('scheduleAutoSave') && html.includes('已自动保存') && html.includes('500') && html.includes('保存全部设置'));
+check('settings page login section is first in core pane', html.indexOf('loginSection') > 0 && html.indexOf('loginSection') < html.indexOf('id="healthBtn"'), `loginSection@${html.indexOf('loginSection')}, healthBtn@${html.indexOf('id="healthBtn"')}`);
+check('settings page has core login button + friendly login help', html.includes('loginBtnCore') && html.includes('打开 Edge 登录抖音') && html.includes('loginHelpCore'));
+check('settings page sticky nav has login entry', html.includes('data-nav="login"') && html.includes('登录抖音'));
+check('settings page safety relogin button kept', html.includes('reloginBtn') && html.includes('重新扫码登录'));
+check('settings page health section says 13 checks', html.includes('13 项检查'));
 check('settings page reloads saved state', html.includes('/api/allowed') && html.includes('/api/config'));
 check('settings page has 5 package tabs', ['pane-core', 'pane-interact', 'pane-discover', 'pane-publish', 'pane-safety'].every((s) => html.includes(s)));
 check('settings page has top status cards', html.includes('cardLogin') && html.includes('cardCounts') && html.includes('cardSpark') && html.includes('cardRisk'));
@@ -395,7 +402,7 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// v0.3.1 health check: 12 real checks, pass/fail/unknown with reasons.
+// v0.3.2 health check: 13 real checks (12 + fish-share), pass/fail/unknown with reasons.
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-health-'));
   const store = await import('./lib/store.mjs');
@@ -408,7 +415,8 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   // Fresh dir: no allowed.json, empty whitelist, all dangerous off.
   const cfg = loadConfig(tmp);
   const fresh = await runHealthCheck(tmp, cfg, { probeLogin: fakeLoggedIn });
-  check('health check returns 12 checks', fresh.total === 12 && fresh.checks.length === 12, fresh.checks.map((c) => c.id).join(','));
+  check('health check returns 13 checks', fresh.total === 13 && fresh.checks.length === 13, fresh.checks.map((c) => c.id).join(','));
+  check('health check includes fish-share item', fresh.checks.some((c) => c.id === 'fish-share'));
   check('health check: fresh dir fails allowed-save + whitelist', fresh.checks.find((c) => c.id === 'allowed-save')?.status === 'fail' && fresh.checks.find((c) => c.id === 'whitelist')?.status === 'fail');
   check('health check: fresh dir passes dangerous-off + budget', fresh.checks.find((c) => c.id === 'dangerous-off')?.status === 'pass' && fresh.checks.find((c) => c.id === 'budget')?.status === 'pass');
   check('health check: fresh dir passes edge-login with fake probe', fresh.checks.find((c) => c.id === 'edge-login')?.status === 'pass');
@@ -487,6 +495,91 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+// v0.3.2: friendly playwright-missing error — Chinese cause + fix,
+// not just "Cannot find package 'playwright'".
+{
+  const browser = await import('./lib/browser.mjs');
+  check('browser exports friendly-error helpers', typeof browser.toFriendlyBrowserError === 'function' && typeof browser.isPlaywrightMissingError === 'function' && typeof browser.PLAYWRIGHT_FIX === 'string');
+  const friendly = browser.toFriendlyBrowserError(new Error("Cannot find package 'playwright' imported from lib/browser.mjs"));
+  check('playwright-missing error is Chinese + has fix steps', friendly.ok === false && friendly.error === 'playwright-missing' && friendly.message.includes('playwright 没装') && friendly.fix.includes('pnpm install') && friendly.fix.includes('node_modules\\playwright'));
+  check('non-playwright browser error keeps its own message', browser.toFriendlyBrowserError(new Error('Edge crashed')).error === 'browser-error');
+  // getContext must surface the friendly text when playwright is absent
+  // on this box (no node_modules here): it throws, message in Chinese.
+  try {
+    await browser.getContext(path.join(os.tmpdir(), 'dy-gonzalez-no-pw-' + Date.now()));
+    check('getContext throws friendly error without playwright', false, 'did not throw');
+  } catch (e) {
+    check('getContext throws friendly error without playwright', String(e.message).includes('playwright 没装') && String(e.message).includes('pnpm install'), String(e.message).slice(0, 80));
+  }
+}
+
+// v0.3.2: fish interop — append-only to ~/.dsh-fish/inbox.md, never
+// rewrite, never touch events.jsonl; health check item exists.
+{
+  const tmpFish = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-fish-home-'));
+  const tmpData = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-fish-data-'));
+  const fish = await import('./lib/fish.mjs');
+  const inbox = path.join(tmpFish, 'inbox.md');
+  fs.writeFileSync(inbox, '# 大肥鱼的收件箱\n\n- 2026-11-01 旧的一条，别动我\n', 'utf8');
+  const first = fish.shareToFish(tmpData, { date: '2026-11-15', watched: 5, replies: 2, liked: 1, commented: 0, shared: 1, posted: 0 }, { fishDir: tmpFish });
+  check('shareToFish appends one line', first.ok === true && fs.readFileSync(inbox, 'utf8').includes('【抖音分享】'));
+  check('shareToFish keeps old inbox content (append-only)', fs.readFileSync(inbox, 'utf8').includes('旧的一条，别动我'));
+  const second = fish.shareToFish(tmpData, { date: '2026-11-15', watched: 3, replies: 0, liked: 0, commented: 0, shared: 0, posted: 0, note: '又刷了一轮' }, { fishDir: tmpFish });
+  const lines = fs.readFileSync(inbox, 'utf8').split('\n').filter((l) => l.includes('【抖音分享】'));
+  check('shareToFish second share appends again, does not overwrite', second.ok === true && lines.length === 2 && lines[1].includes('又刷了一轮'));
+  const status = fish.fishShareStatus({ fishDir: tmpFish });
+  check('fishShareStatus reports last share', status.status === 'pass' && status.detail.includes('2026-11-15'));
+  const emptyFish = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-fish-empty-'));
+  const noShare = fish.fishShareStatus({ fishDir: path.join(emptyFish, 'no-home-yet') });
+  check('fishShareStatus is unknown (not fail) when fish home does not exist', noShare.status === 'unknown');
+  // dy_fish_share tool runs end to end: register tools on a fake ctx,
+  // call the real execute() with DSH_FISH_HOME pointed at the temp home
+  // so it never touches the real ~/.dsh-fish on this box.
+  const entry2 = await import('./dsh-plugin.mjs');
+  const { dataPaths } = await import('./lib/paths.mjs');
+  const { appendJsonl } = await import('./lib/store.mjs');
+  const today = new Date().toISOString().slice(0, 10);
+  appendJsonl(dataPaths(tmpData).watchLogFile, { at: `${today}T10:00:00.000Z`, caption: '测试视频', frameBytes: 1 });
+  const tools = [];
+  process.env.DSH_FISH_HOME = tmpFish;
+  await entry2.apply({ tools: { register: (t) => tools.push(t) } }, { dataDir: tmpData });
+  const fishTool = tools.find((t) => t.name === 'dy_fish_share');
+  check('dy_fish_share tool is registered', Boolean(fishTool));
+  const fishRes = JSON.parse(await fishTool.execute({ date: today }));
+  check('dy_fish_share execute appends to the fake fish inbox', fishRes.ok === true && fs.readFileSync(inbox, 'utf8').split('\n').filter((l) => l.includes('【抖音分享】')).length === 3);
+  check('dy_fish_share also writes douyin memory', fs.existsSync(path.join(tmpData, 'memory', `${today.slice(0, 7)}.md`)));
+  delete process.env.DSH_FISH_HOME;
+  fs.rmSync(tmpFish, { recursive: true, force: true });
+  fs.rmSync(tmpData, { recursive: true, force: true });
+  fs.rmSync(emptyFish, { recursive: true, force: true });
+}
+
+// v0.3.2: DSH native panel (client.js) — section + common items +
+// link to the full local settings page; never claims to be built in.
+{
+  const clientSrc = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8');
+  const client = await import('./client.js');
+  check('client.js exposes NATIVE_PANEL_ITEMS', Array.isArray(client.NATIVE_PANEL_ITEMS) && client.NATIVE_PANEL_ITEMS.length >= 4);
+  check('client.js native panel lists core/dangerous/whitelist/health/login', ['core', 'dangerous', 'whitelist', 'health', 'login'].every((id) => client.NATIVE_PANEL_ITEMS.some((i) => i.id === id)));
+  check('client.js adds a settings section pointing at the local page', clientSrc.includes('addSection') && clientSrc.includes('127.0.0.1:8765'));
+  check('client.js says plainly DSH itself cannot be modified', clientSrc.includes('改不了') && clientSrc.includes('完整设置'));
+  check('client.js apply() is safe with no runtime', (() => { try { client.apply(null); client.apply({}); return true; } catch { return false; } })());
+}
+
+// v0.3.2: README is honest about online install + release + fish.
+{
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  check('README documents GitHub clone install', readme.includes('git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git'));
+  check('README says plainly npm is NOT published yet', readme.includes('还没发布到 npm'));
+  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.3.2'));
+  check('README documents git tag + gh release', readme.includes('git tag v0.3.2') && readme.includes('gh release create'));
+  check('README documents fish share as one-way only', readme.includes('单向分享') && readme.includes('不是双向实时对话'));
+  check('README documents DSH native panel limits', readme.includes('DSH 本体是第三方的') && readme.includes('原生面板'));
+  check('README documents auto-save', readme.includes('自动保存') && readme.includes('500ms'));
+  check('README documents login on the first page', readme.includes('核心包最上面') || readme.includes('登录抖音'));
+  check('README version is 0.3.2', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.2）'));
+}
+
 // Settings server really runs: save config -> read back identical,
 // POST /api/health returns the 12 checks (Edge probe is unknown on
 // this Linux box — no Edge — and must not crash the endpoint).
@@ -511,8 +604,14 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
       check('settings server POST /api/config saves', saveRes.ok === true);
       const back = await fetch(`${base}/api/config`).then((r) => r.json());
       check('settings server GET /api/config reads back the save', back.autoLike?.perDay === 7 && back.packages?.interact?.enabled === true && back.caps?.totalOutwardPerDay === 25 && back.share?.enabled === false);
+      const allowedSave = await fetch(`${base}/api/allowed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed: [{ id: 'conv-1', name: '阿明', kind: 'dm', interests: ['美食'] }] }) }).then((r) => r.json());
+      check('settings server POST /api/allowed saves + reads back', allowedSave.ok === true && allowedSave.readBack?.allowed?.length === 1);
+      const allowedBack = await fetch(`${base}/api/allowed`).then((r) => r.json());
+      check('settings server GET /api/allowed reads back the save', allowedBack.allowed?.[0]?.id === 'conv-1' && allowedBack.allowed?.[0]?.interests?.[0] === '美食');
+      const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST' }).then((r) => r.json());
+      check('settings server POST /api/login/open gives friendly playwright-missing error on this box', loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install') && loginOpen.message.includes('playwright'), loginOpen.message ?? '');
       const health = await fetch(`${base}/api/health`, { method: 'POST' }).then((r) => r.json());
-      check('settings server POST /api/health returns 12 checks', Array.isArray(health.checks) && health.checks.length === 12 && typeof health.summary === 'string', health.summary ?? '');
+      check('settings server POST /api/health returns 13 checks', Array.isArray(health.checks) && health.checks.length === 13 && typeof health.summary === 'string', health.summary ?? '');
       check('settings server health: edge-login is unknown on Linux, not a crash', health.checks?.find((c) => c.id === 'edge-login')?.status === 'unknown');
       check('settings server health: share OFF passes dangerous-off only if nothing else is on', health.checks?.find((c) => c.id === 'dangerous-off')?.status === 'fail');
     }

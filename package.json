@@ -3,7 +3,7 @@
   "dependencies": {
     "playwright": "^1.49.0"
   },
-  "description": "DSH 抖音插件（自写，v0.3.1）：5 个包（核心/互动/发现/发片/安全），刷抖音 + 回私信 + 评论/点赞/分享/收藏/续火花 + 热榜/搜索 + 发视频/ComfyUI + 谷时巡检/风控/记忆 + AstrBot 互通 + 一键体检，白名单按抖音好友 id",
+  "description": "DSH 抖音插件（自写，v0.3.2）：5 个包（核心/互动/发现/发片/安全），刷抖音 + 回私信 + 评论/点赞/分享/收藏/续火花 + 热榜/搜索 + 发视频/ComfyUI + 谷时巡检/风控/记忆 + AstrBot 互通 + 一键体检 + 大肥鱼记忆分享，白名单按抖音好友 id",
   "dsh": {
     "bundle": {
       "patch": "./cordis.bundle.yml"
@@ -41,6 +41,14 @@
   "license": "MIT",
   "main": "dsh-plugin.mjs",
   "name": "dsh-douyin-gonzalez",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhaoxj59/dsh-douyin-gonzalez.git"
+  },
+  "homepage": "https://github.com/zhaoxj59/dsh-douyin-gonzalez",
+  "bugs": {
+    "url": "https://github.com/zhaoxj59/dsh-douyin-gonzalez/issues"
+  },
   "os": [
     "win32"
   ],
@@ -62,5 +70,5 @@
     "test": "node selfcheck.mjs"
   },
   "type": "module",
-  "version": "0.3.1"
+  "version": "0.3.2"
 }

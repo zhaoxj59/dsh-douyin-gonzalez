@@ -1,10 +1,12 @@
-// DSH plugin entry, v0.3.1. Modular: 5 packages, one master switch each.
+// DSH plugin entry, v0.3.2. Modular: 5 packages, one master switch each.
 //   core (always on) / interact / discover / publish / safety.
 // A tool whose package is OFF returns package-disabled and does nothing.
 // Write tools additionally pass the risk gate (safety.risk.paused):
 // when risk is hit, ALL writes stop until the user clears it in settings.
 // v0.1/v0.2 core is unchanged: watch + DM whitelist + auto-choose + report.
 // v0.3.1: share defaults OFF (config v4 migration), dy_health_check added.
+// v0.3.2: friendly playwright-missing error, dy_fish_share, login on the
+// first page, auto-save, DSH native panel section.
 import { dataPaths } from './lib/paths.mjs';
 import { loadAllowed, canDoAction, alreadyActedOnVideo, logAction, rotationGate } from './lib/store.mjs';
 import { loadConfig, packageGate } from './lib/config.mjs';
@@ -21,7 +23,8 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_dm_reply_stranger', pkg: 'core', description: '给一个陌生人回一条私信。只有在设置页显式打开“陌生人私信回复”开关时才可用，有独立的每日上限（默认 3 条），和白名单回复分开计数。默认关闭。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReplyStranger' },
   { name: 'dy_daily_report', pkg: 'core', description: '从本地观看/回复/点赞/评论/分享/发视频记录生成当天的 Markdown 日报，不额外调模型。', parameters: { type: 'object', properties: { date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' } } }, execute: 'dailyReport' },
   { name: 'dy_astrbot_status', pkg: 'core', description: '查看 AstrBot 桥的状态（是否开启、端口、今日计数）。桥默认关闭，开启也只监听 127.0.0.1 + token。', parameters: { type: 'object', properties: {} }, execute: 'astrbotStatus' },
-  { name: 'dy_health_check', pkg: 'core', description: '一键体检：真跑 12 项检查（Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控），返回通过几项、不通过哪几项，每项不通过都写原因。只读本地状态，不改任何文件；Edge 探不到时那项报 unknown，不假装通过。', parameters: { type: 'object', properties: {} }, execute: 'healthCheck' },
+  { name: 'dy_health_check', pkg: 'core', description: '一键体检：真跑 13 项检查（Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控、大肥鱼记忆互通），返回通过几项、不通过哪几项，每项不通过都写原因。只读本地状态，不改任何文件；Edge 探不到时那项报 unknown，不假装通过。', parameters: { type: 'object', properties: {} }, execute: 'healthCheck' },
+  { name: 'dy_fish_share', pkg: 'core', description: '把今天的抖音日报摘要分享给大肥鱼：往大肥鱼家里的 inbox.md 追加一条（只追加，不改它原有内容），同时记进抖音专属记忆。单向分享记录，不是实时对话——大肥鱼不会因此主动来聊抖音，想让它聊，得在它的会话里问它。', parameters: { type: 'object', properties: { date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' }, note: { type: 'string', description: '想顺带告诉大肥鱼的一句话，可不填' } } }, execute: 'fishShare' },
   // interact
   { name: 'dy_like', pkg: 'interact', write: true, description: '给当前正在看的视频点赞。互动包总开关 + 点赞开关 + 每日上限；同一视频只点赞一次，且同一视频一天内只做一种动作（动作轮转）。', parameters: { type: 'object', properties: { videoId: { type: 'string' } }, required: ['videoId'] }, execute: 'like' },
   { name: 'dy_comment', pkg: 'interact', write: true, description: '给当前正在看的视频发一条评论。互动包总开关 + 评论开关 + 每日上限；同一视频只评论一次，动作轮转。', parameters: { type: 'object', properties: { videoId: { type: 'string' }, text: { type: 'string' } }, required: ['videoId', 'text'] }, execute: 'comment' },
@@ -237,16 +240,44 @@ async function runTool(toolName, args, dataDir) {
       return { ok: true, valley, nextDelayMs: nextPatrolDelayMs(config), runsToday: state.runsToday, message: valley.ok ? `谷时窗口（${valley.window}）内，可刷。` : '不在谷时窗口内，本次巡检只记录、不刷。' };
     }
     case 'dy_login_status': {
-      const { checkLoginStatus } = await import('./lib/browser.mjs');
-      const { recordLogin } = await import('./lib/safety.mjs');
-      const res = await checkLoginStatus(dir);
-      if (res.ok) {
-        const saved = recordLogin(dir, res.loggedIn);
-        const cfg = { ...config, login: saved };
-        const { saveConfig } = await import('./lib/config.mjs');
-        saveConfig(dir, cfg);
+      // v0.3.2: playwright 没装时返回中文原因 + 修法，不扔英文原文。
+      try {
+        const { checkLoginStatus } = await import('./lib/browser.mjs');
+        const { recordLogin } = await import('./lib/safety.mjs');
+        const res = await checkLoginStatus(dir);
+        if (res.ok) {
+          const saved = recordLogin(dir, res.loggedIn);
+          const cfg = { ...config, login: saved };
+          const { saveConfig } = await import('./lib/config.mjs');
+          saveConfig(dir, cfg);
+        }
+        return res;
+      } catch (e) {
+        const { toFriendlyBrowserError } = await import('./lib/browser.mjs');
+        return toFriendlyBrowserError(e);
       }
-      return res;
+    }
+    case 'dy_fish_share': {
+      const { buildDailyReport } = await import('./lib/report.mjs');
+      const { shareToFish, FISH_SHARE_TAG } = await import('./lib/fish.mjs');
+      const { appendMemory } = await import('./lib/safety.mjs');
+      const date = args?.date ?? new Date().toISOString().slice(0, 10);
+      const report = buildDailyReport(dir, date);
+      const num = (re) => Number(report.text.match(re)?.[1] ?? 0);
+      const summary = {
+        date,
+        watched: report.watched ?? 0,
+        replies: num(/回复私信：(\d+) 条/),
+        liked: num(/点赞：(\d+) 次/),
+        commented: num(/评论：(\d+) 条/),
+        shared: num(/分享：(\d+) 次/),
+        posted: num(/发视频：(\d+) 条/),
+        note: args?.note ?? '',
+      };
+      // 同时记进抖音专属记忆（memory/YYYY-MM.md），再追加到大肥鱼 inbox。
+      appendMemory(dir, `${FISH_SHARE_TAG} ${date}：看了 ${summary.watched} 条，回了 ${summary.replies} 条私信。已分享给大肥鱼。`);
+      const res = shareToFish(dir, summary);
+      return { ok: true, ...res, message: `已分享给大肥鱼：${res.line}` };
     }
     case 'dy_cleanup': {
       const { cleanupOld } = await import('./lib/safety.mjs');
@@ -288,7 +319,7 @@ async function runTool(toolName, args, dataDir) {
 export async function apply(ctx, config = {}) {
   const dataDir = config.dataDir ?? process.env.DSH_DOUYIN_DATA_DIR;
   const paths = dataPaths(dataDir);
-  console.log(`[dsh-douyin-gonzalez] loaded v0.3.1. data dir: ${paths.dir}`);
+  console.log(`[dsh-douyin-gonzalez] loaded v0.3.2. data dir: ${paths.dir}`);
 
   let defineTool = null;
   try { ({ defineTool } = await import('@deepseek-ai/dsh-tools')); } catch { defineTool = null; }

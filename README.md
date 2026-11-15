@@ -1,21 +1,30 @@
-# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.1）
+# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.2）
 
 刷抖音 + 回私信 + 互动 + 发现 + 发片 + 安全，**5 个包分开装、各自一个总开关**。好友许可名单用真实勾选 + 显式保存，按抖音好友 id 匹配。这是为了解决 LockyBee `dsh-douyin-browser-local` 1.4.7 上用户遇到的问题：私信列表读得到，但点选不了 / 选完不保存。
 
 > 第三方插件，不是 DeepSeek 官方发行版。抖音登录只留在本机 Edge 里，本插件不读、不存、不发任何 Cookie / 密码。
+
+## v0.3.2：用户提的 6 个问题，逐条落地
+
+1. **报错说人话**：playwright 没装时，以前只扔一句英文 `Cannot find package 'playwright'`。现在 `lib/browser.mjs` 里 import 失败就换成中文原因 + 一步一步的修法（进 `C:\dsh-douyin-gonzalez` 跑 `pnpm install`，装不上就开全局/TUN 再跑或改跑 `npm install`，装完看 `node_modules\playwright` 文件夹在不在）。体检里 Edge 登录那项、设置页 `/api/login/open`、工具 `dy_login_status` 都透传这份中文办法，设置页登录失败时也直接显示出来。
+2. **在线下载**：代码已按 npm 发布要求准备好（`package.json` 有 name/version/files/engines/license，加了 repository/homepage/bugs）。**但还没真的发布到 npm**——发布要用户自己的 npm 账号登录一次、跑 `npm publish`，这一步我做不了（没有用户的 npm 账号/Token），也没假装已发布。发布后的安装命令会是 `dsh plugin --profile web add dsh-douyin-gonzalez@0.3.2`。现在能在线装的办法是 GitHub clone（见“安装”一节），仓库：https://github.com/zhaoxj59/dsh-douyin-gonzalez 。打 Release 的办法也写在“安装”一节了（`git tag v0.3.2` + `gh release create`）。
+3. **内置到 DSH 里？做不到，但常用项收进了 DSH 原生面板**：DSH 本体是第三方的，改不了、塞不进去，这个没法假装。能做的上限是 DSH 客户端提供的设置注入点（`client.js`）：在 DSH 设置里挂一个“刷抖音（自写）”分区，放最常用的几项（核心包、危险动作总开关、白名单人数、一键体检、登录抖音）和完整设置页地址。5 个包的全部设置（几十个开关 + 数字 + 选人勾选）放不进原生面板，只能留在本地网页设置页（`http://127.0.0.1:8765/`）。所以：原生面板 = 快捷入口 + 常用开关；网页页 = 完整设置。`client.js` 里所有挂接都先判运行时有没有这个能力，没有就静默跳过，绝不拖垮插件本体。
+4. **登录放第一页**：设置页核心包最上面加了“🔑 登录抖音”一节：登录状态 + “打开 Edge 登录抖音”按钮 + 登录失败时显示第 1 条的中文修法。吸顶目录条里也加了“🔑 登录抖音”，一点就跳过去。安全包里原来的“重新扫码登录”保留，两处调同一个接口。
+5. **设置自动保存**：开关/数字/勾选一改就自动保存（500ms 防抖，调已有的 `POST /api/config` + `/api/allowed`），存成功顶部写“已自动保存 HH:MM:SS”，失败写红字原因；“保存全部设置”按钮还留着，当手动兜底。选人勾选也一样，勾完自动保存读回核对。
+6. **和大肥鱼互通（包括记忆）**：新工具 `dy_fish_share`（核心包）+ `lib/fish.mjs`。把当天日报摘要写两份：① 抖音专属记忆 `memory/YYYY-MM.md`；② 大肥鱼家里的 `~/.dsh-fish/inbox.md`，只追加一行，绝不改它原有内容、不碰 `events.jsonl`。体检加了第 13 项“大肥鱼记忆互通”，只读检查 inbox.md 能不能写、最近一次分享是什么时候。**说清楚：这只是单向分享记录，不是双向实时对话**——大肥鱼不会因为 inbox 里多了一条就主动来聊抖音，想让它聊，得在它的会话里问它。
 
 ## v0.3.1：模版确认的 4 项落地
 
 1. **吸顶目录条**：设置页顶上 `position: sticky` 的目录条（核心 / 互动·点赞评论 / 发现 / 发片 / 安全 + 🩺 一键体检），翻到点赞那块也能一点跳回。
 2. **危险动作默认全关 + 预算单独放大**：点赞、评论、@人、分享、收藏、表情包、续火花、回自己评论、回陌生人私信，9 个开关默认全关；**分享从默认开改成默认关**（见下方升级说明）。每日次数全挪进互动包里单独的黄色「每日预算」区，数字 24px 粗体，不跟口吻、收藏夹等普通设置混在一起；开关关着，对应的次数框置灰点不动。新增每日总闸 `caps.totalOutwardPerDay`（默认 20 次/天），只在体检里算，不在工具里硬拦。
 3. **每包开头一句话**：5 个包各在开头写一句“这个包会干什么”，一句话。
-4. **一键体检**：新工具 `dy_health_check`（核心包）+ 设置页核心包里的体检栏 + 设置服务 `POST /api/health`。真跑 12 项检查（见下一节），跑完写通过几项、不通过哪几项，每项不通过都写原因；Edge 探不到时那项报 unknown，不假装通过。
+4. **一键体检**：新工具 `dy_health_check`（核心包）+ 设置页核心包里的体检栏 + 设置服务 `POST /api/health`。真跑 13 项检查（见下一节），跑完写通过几项、不通过哪几项，每项不通过都写原因；Edge 探不到时那项报 unknown，不假装通过。
 
-### 一键体检的 12 项
+### 一键体检的 13 项
 
 | # | 检查 | 不通过是什么意思 |
 |---|---|---|
-| 1 | Edge 已启动并登录抖音 | 未登录：去安全包重新扫码登录；Edge 没起来则报 unknown |
+| 1 | Edge 已启动并登录抖音 | 未登录：去核心包点“打开 Edge 登录抖音”扫码；Edge 没起来则报 unknown。playwright 没装时这一项会写中文原因 + 一步一步的修法 |
 | 2 | 看片层（OCR / 转写） | OCR/转写开了但本机没有：依赖内容的动作先跳过。插件测不到 DSH 主模型是否支持看图，那是 DSH 侧的模型配置 |
 | 3 | 许可名单保存读回一致 | allowed.json 读不出来 / 读回人数对不上：重新勾选保存 |
 | 4 | 白名单不为空 | 白名单是空的：先勾人并保存 |
@@ -27,6 +36,7 @@
 | 10 | AstrBot 互通状态 | 桥开了但没填 token：启动会被拒绝 |
 | 11 | 定时巡检状态 | 只报状态，不判不通过 |
 | 12 | 风控状态 | 暂停中：所有写动作已停手，去 Edge 确认后解除 |
+| 13 | 大肥鱼记忆互通 | inbox.md 写不进去：检查 `~/.dsh-fish/` 权限；还没分享过报 unknown，不算失败 |
 
 ## v0.3.0：5 个包（全部 20 项建议都做进去了）
 
@@ -42,7 +52,7 @@
 
 **包关了 = 那个包的工具直接拒绝（`package-disabled`），不加载、不跑定时器。** 想用哪个包，先在设置页打开它的总开关，再开里面的小开关。
 
-## 功能（32 个工具）
+## 功能（33 个工具）
 
 | 包 | 工具 | 说明 |
 |---|---|---|
@@ -51,7 +61,8 @@
 | 核心 | `dy_dm_reply` / `dy_dm_reply_stranger` | 只回 `allowed.json` 里勾选过的会话 / 回陌生人（单独开关，独立上限） |
 | 核心 | `dy_daily_report` | 从本地记录生成 Markdown 日报，不额外调模型 |
 | 核心 | `dy_astrbot_status` | 查看 AstrBot 桥的状态和今日计数 |
-| 核心 | `dy_health_check` | 一键体检：真跑 12 项检查，返回通过几项、不通过哪几项及原因 |
+| 核心 | `dy_health_check` | 一键体检：真跑 13 项检查，返回通过几项、不通过哪几项及原因 |
+| 核心 | `dy_fish_share` | 把当天日报摘要分享给大肥鱼：往 `~/.dsh-fish/inbox.md` 追加一行（只追加），同时记进抖音专属记忆。单向分享，不是实时对话 |
 | 互动 | `dy_like` / `dy_comment` | 点赞 / 评论当前视频；同一视频只做一次，动作轮转 |
 | 互动 | `dy_comment_mention` | 发一条带 @ 的评论（@设置页里填的那个人），@评论独立计数 |
 | 互动 | `dy_share` | 按兴趣把当前视频分享给白名单里的具体人；不群发；同一视频 + 同一人只分享一次 |
@@ -78,7 +89,7 @@
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "packages": { "core": { "enabled": true }, "interact": { "enabled": false }, "discover": { "enabled": false }, "publish": { "enabled": false }, "safety": { "enabled": false } },
   "autoComment": { "enabled": false, "perDay": 3 },
   "autoLike": { "enabled": false, "perDay": 10 },
@@ -113,7 +124,40 @@
 - Node.js ≥ 22.13，DSH `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0`（与 LockyBee 1.4.7 相同的范围；DSH 0.2.2-rc.2 不在官方验证表里，见“未验证”）
 - 一个支持看图的模型（刷视频要看画面才有意义）
 
-## 安装 / 更新到 v0.3.1
+## 安装 / 更新到 v0.3.2
+
+### 办法一：GitHub clone（现在就能在线装）
+
+```powershell
+git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git C:\dsh-douyin-gonzalez
+cd C:\dsh-douyin-gonzalez
+pnpm install
+node selfcheck.mjs
+dsh plugin --profile web add link:C:\dsh-douyin-gonzalez
+```
+
+更新：进这个文件夹跑 `git pull`，再 `pnpm install`，重装插件即可。
+
+### 办法二：npm 在线安装（还没发布，先别跑）
+
+代码已按 npm 发布要求准备好（name/version/files/engines/license/repository/homepage/bugs 齐全），但**还没发布到 npm**：发布要用户自己的 npm 账号登录一次、跑 `npm publish`，没有用户的 npm 账号/Token，这一步做不了。发布后安装命令会是：
+
+```powershell
+dsh plugin --profile web add dsh-douyin-gonzalez@0.3.2
+```
+
+等 DSH 市场收录后，也可以直接在市场里搜 `dsh-douyin-gonzalez` 安装——同样还没收录，别去搜了，搜不到。
+
+### 打 GitHub Release（给仓库打 tag）
+
+```powershell
+cd C:\dsh-douyin-gonzalez
+git tag v0.3.2
+git push origin v0.3.2
+gh release create v0.3.2 --title "v0.3.2" --notes "友好报错、登录放第一页、自动保存、DSH 原生面板、大肥鱼记忆分享"
+```
+
+### 本地自检
 
 ```powershell
 cd <本插件目录>
@@ -123,12 +167,14 @@ node selfcheck.mjs
 
 `selfcheck.mjs` 不需要 DSH、不用登录抖音、不用联网（除 `pnpm install` 本身），跑完应全部 PASS。
 
-DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.3.1`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
+DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.3.2`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
 
 ```powershell
 dsh plugin --profile web add link:C:\path\to\dsh-douyin-gonzalez
 dsh plugin --profile desktop add link:C:\path\to\dsh-douyin-gonzalez
 ```
+
+从 v0.3.1 升级：直接覆盖目录、`git pull` 或重装即可。`config.json` 不用迁移（还是 v4），所有开关、上限、白名单都保留。新增：登录挪到核心包最上面、改完自动保存、体检多 1 项（大肥鱼记忆互通）、新工具 `dy_fish_share`。
 
 从 v0.3.0 升级：直接覆盖目录、重装即可。`config.json` 会从 v3 读成 v4：**分享改成默认关——之前开着分享的，升级后分享会停掉，要重新在设置页 → 互动包打开“自行分享”开关才能继续用**（次数还是原来的 3 次/天）。其他开关和上限都保留。`allowed.json` v2 不变（兴趣还在）。
 
@@ -144,9 +190,21 @@ dsh plugin --profile desktop add link:C:\path\to\dsh-douyin-gonzalez
    # 打开 http://127.0.0.1:8765/
    ```
 2. 在 DSH 里让大肥鱼调 `dy_list_chats`（或在 Edge 里先打开抖音登录一次），私信列表会写进 `chats.json`，选人页点“刷新列表”就能看到。
-3. **在选人页勾选要回的人，每人填兴趣（逗号分隔，例如 `美食,宠物`），再改好开关和次数 → 点“💾 保存全部设置”** → 页面显示“保存成功，并已从文件再读一遍核对”，这才算数。只勾不保存 = 没保存。保存会同时写 `allowed.json` 和 `config.json`，两个都读回核对。
-4. 在 Edge 里登录抖音（手动登录 / 过验证码），登录状态只留在本机 Edge 里。登录掉了，设置页首页会红字提醒，点“重新扫码登录”。
+3. **在选人页勾选要回的人，每人填兴趣（逗号分隔，例如 `美食,宠物`），再改好开关和次数 → 自动保存**（改完半秒后存，顶部会写“已自动保存 HH:MM:SS”）。保存会同时写 `allowed.json` 和 `config.json`，两个都读回核对。自动保存失败时顶部写红字原因，再点“💾 保存全部设置”手动存一次。
+4. 在 Edge 里登录抖音：设置页 → 核心包最上面的“🔑 登录抖音” → 点“打开 Edge 登录抖音”，在 Edge 里扫码 / 过验证码。登录状态只留在本机 Edge 里。登录掉了，设置页会红字提醒；安全包里也有个“重新扫码登录”，同一个接口。
 5. 让大肥鱼调 `dy_watch` 开始刷；有新私信时，它只能给已许可的人回；想用互动/发现/发片/安全包的功能，先开包总开关。
+
+## 大肥鱼记忆互通（v0.3.2，单向分享）
+
+大肥鱼 = DSH 里的大肥鱼 dsh-fish，家在 `~/.dsh-fish/`，`events.jsonl` 是它自己的记忆源，**这个插件绝不动它**。
+
+- 工具 `dy_fish_share`（核心包，可带 `date` / `note`）：把当天日报摘要写两份——① 抖音专属记忆 `memory/YYYY-MM.md`；② 大肥鱼家里的 `~/.dsh-fish/inbox.md`，**只追加一行**，原有内容原样保留，不改、不删。内容写清来源是抖音插件、日期、看了几条、回了谁。
+- 体检第 13 项“大肥鱼记忆互通”只读检查：inbox.md 能不能写、最近一次抖音分享是什么时候。还没分享过报 unknown，不算失败。
+- **这只是单向分享记录，不是双向实时对话**：大肥鱼不会因为 inbox 里多了一条就主动来聊抖音。想让它聊，得在它的会话里问它（它读得到 inbox / 记忆）。
+
+## DSH 原生面板（v0.3.2，能做的上限）
+
+DSH 本体是第三方的，改不了、塞不进去。插件能做的上限是 DSH 客户端提供的设置注入点（`client.js`）：在 DSH 设置里挂一个“刷抖音（自写）”分区，放最常用的几项（核心包、危险动作总开关、白名单人数、一键体检、登录抖音）和完整设置页地址。5 个包的全部设置放不进原生面板，只能留在本地网页设置页（`http://127.0.0.1:8765/`）。原生面板挂不上时静默跳过，插件本体不受影响。
 
 ## 逐项测试方法（v0.3.0 新增）
 
@@ -171,9 +229,17 @@ dsh plugin --profile desktop add link:C:\path\to\dsh-douyin-gonzalez
 19. **来源多选**：发现包开、勾了热榜 + 搜索，调 `dy_watch_sources`，返回里应列出勾的来源。
 20. **AstrBot**：不变，见下。
 
+## 逐项测试方法（v0.3.2 新增）
+
+1. **友好报错**：在一台没装 playwright 的机器上调 `dy_login_status` 或在设置页点登录，应返回中文原因 + 一步一步的修法（`pnpm install`、看 `node_modules\playwright`），而不是只有 `Cannot find package 'playwright'` 一句英文。体检 Edge 那项也应带上这份中文办法。
+2. **登录在第一页**：打开设置页，核心包最上面就是“🔑 登录抖音”一节；点吸顶目录条里的“🔑 登录抖音”，应跳到这一节。安全包里的“重新扫码登录”还在，点它和点核心包的按钮是一样的。
+3. **自动保存**：改一个开关，等半秒，顶部应写“已自动保存 HH:MM:SS”；刷新页面，开关还在。勾一个人也一样。把设置服务停掉再改，应写红字失败，再点“保存全部设置”手动存。
+4. **大肥鱼分享**：调 `dy_fish_share`，应往 `~/.dsh-fish/inbox.md` 追加一行 `【抖音分享】…`，旧内容原样还在；再调一次，应再追加一行，不覆盖。体检第 13 项应报最近一次分享的时间。
+5. **DSH 原生面板**：DSH 设置里应有“刷抖音（自写）”分区，写着常用项和完整设置页地址；点不开也不影响插件本体。
+
 ## 逐项测试方法（v0.3.1 新增）
 
-1. **一键体检**：在 DSH 里调 `dy_health_check`，或在设置页 → 核心包点“运行一键体检”，应返回 12 项检查、通过几项、不通过哪几项；默认配置下白名单是空的、allowed.json 还没有，至少这两项应报不通过并写原因。
+1. **一键体检**：在 DSH 里调 `dy_health_check`，或在设置页 → 核心包点“运行一键体检”，应返回 13 项检查、通过几项、不通过哪几项；默认配置下白名单是空的、allowed.json 还没有，至少这两项应报不通过并写原因。
 2. **分享默认关**：新装（没有 config.json）时分享开关是关的，调 `dy_share` 应被挡下；把 v0.3.0 的 config.json（分享开着）放进来再加载，应被读成关的，再打开开关保存后才恢复。
 3. **预算总闸**：把点赞 10 + 评论 3 + 分享 3 全打开，合计 16 没超总闸 20，体检预算项应通过；再把收藏 5 也打开，合计 21 超了，体检应报不通过并列出分项。
 4. **吸顶目录条**：设置页往下翻到点赞那块，顶上的目录条应一直看得见，点“安全包”应跳到安全包。
@@ -259,11 +325,11 @@ POST 到你填的 webhookUrl，JSON：
 
 已验证（本机 Linux，Node v24）：
 - `node --check` 全部 JS 文件通过
-- `node selfcheck.mjs` 全部通过（214 项）：manifest、32 个工具及包归属、设置页（5 个标签页 + 顶部状态卡 + 全部新分区）、config v4 默认值 + 往返 + 越界截断 + v2/v3 迁移、allowed.json v2 带兴趣往返、陌生人门（关时拒绝）、各类上限强制执行、动作轮转、分享按兴趣挑人 + 永久去重、发视频门（无文件 / 非视频 / 找不到文件都拒绝）、收藏/表情包/续火花/回自己评论/@评论各门、发现来源与诊断、标题模板与 ComfyUI 取最新文件、谷时窗口（13:00 在内、10:00 在外）、巡检抖动、风控暂停与解除、抖音记忆写读、看片阈值与转写不可用、AstrBot 默认关闭 + 无 token 拒绝启动、日报含收藏/续火花数、一键体检 12 项真跑、分享默认关
+- `node selfcheck.mjs` 全部通过（见本节末尾的最新数字）：manifest、33 个工具及包归属、设置页（5 个标签页 + 顶部状态卡 + 全部新分区）、config v4 默认值 + 往返 + 越界截断 + v2/v3 迁移、allowed.json v2 带兴趣往返、陌生人门（关时拒绝）、各类上限强制执行、动作轮转、分享按兴趣挑人 + 永久去重、发视频门（无文件 / 非视频 / 找不到文件都拒绝）、收藏/表情包/续火花/回自己评论/@评论各门、发现来源与诊断、标题模板与 ComfyUI 取最新文件、谷时窗口（13:00 在内、10:00 在外）、巡检抖动、风控暂停与解除、抖音记忆写读、看片阈值与转写不可用、AstrBot 默认关闭 + 无 token 拒绝启动、日报含收藏/续火花数、一键体检 13 项真跑、分享默认关
 - 设置服务真实跑通过：`GET /` 200；`GET /api/config` → `POST` 改互动包开 / 发现包开 / 点赞 7 条 / 续火花 2 次 → `GET` 读回一致；`POST /api/allowed` 带兴趣保存 → 读回一致；`GET /api/status`（含风控与登录状态）、`/api/memory`、`/api/cleanup`（演练）、`/api/risk/clear` 均返回 200
 
 未验证（这台 Linux 虚拟机做不到，需在用户 Windows 云电脑上做）：
-- 真实 DSH Desktop 0.2.2-rc.2 里安装、加载、32 个工具调用
+- 真实 DSH Desktop 0.2.2-rc.2 里安装、加载、33 个工具调用
 - 真实 Edge 登录抖音、刷视频、私信列表读取、真实回一条私信、评论 / 点赞 / 分享 / 收藏 / 续火花 / 发视频各一次
 - 真实 AstrBot 安装并调通桥（AstrBot 本身不在本机）
 - 真实 ComfyUI 安装并取最新成片（ComfyUI 不在本机）
