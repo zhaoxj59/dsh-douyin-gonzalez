@@ -31,15 +31,26 @@ const HOST = '127.0.0.1';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HTML = fs.readFileSync(path.join(HERE, 'settings.html'), 'utf8');
 
+function setCors(res) {
+  // v0.3.3：DSH 设置面板（DSH 前端源）用 fetch 调本服务，跨源会被
+  // 浏览器拦。只监听 127.0.0.1，本机可信，放行所有本机源。
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
 function json(res, code, obj) {
+  setCors(res);
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(obj));
 }
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  if (req.method === 'OPTIONS') { setCors(res); res.writeHead(204); res.end(); return; }
   const paths = dataPaths();
   if (req.method === 'GET' && url.pathname === '/') {
+    setCors(res);
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(HTML);
     return;

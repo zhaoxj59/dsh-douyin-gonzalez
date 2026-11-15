@@ -23,7 +23,7 @@ function check(name, ok, detail = '') {
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 check('package.json name', pkg.name === 'dsh-douyin-gonzalez', pkg.name);
-check('package.json version 0.3.2', pkg.version === '0.3.2', pkg.version);
+check('package.json version 0.3.3', pkg.version === '0.3.3', pkg.version);
 check('package.json type module', pkg.type === 'module');
 check('dsh.bundle.patch points at cordis.bundle.yml', pkg.dsh?.bundle?.patch === './cordis.bundle.yml');
 check('dsh.client platform web', pkg.dsh?.client?.platform === 'web');
@@ -554,16 +554,18 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   fs.rmSync(emptyFish, { recursive: true, force: true });
 }
 
-// v0.3.2: DSH native panel (client.js) — section + common items +
-// link to the full local settings page; never claims to be built in.
+// v0.3.3: DSH native panel (client.js) — CORRECT settings.section slot
+// pattern. v0.3.2 used a nonexistent addSection API and never mounted.
 {
   const clientSrc = fs.readFileSync(path.join(ROOT, 'client.js'), 'utf8');
-  const client = await import('./client.js');
-  check('client.js exposes NATIVE_PANEL_ITEMS', Array.isArray(client.NATIVE_PANEL_ITEMS) && client.NATIVE_PANEL_ITEMS.length >= 4);
-  check('client.js native panel lists core/dangerous/whitelist/health/login', ['core', 'dangerous', 'whitelist', 'health', 'login'].every((id) => client.NATIVE_PANEL_ITEMS.some((i) => i.id === id)));
-  check('client.js adds a settings section pointing at the local page', clientSrc.includes('addSection') && clientSrc.includes('127.0.0.1:8765'));
-  check('client.js says plainly DSH itself cannot be modified', clientSrc.includes('改不了') && clientSrc.includes('完整设置'));
-  check('client.js apply() is safe with no runtime', (() => { try { client.apply(null); client.apply({}); return true; } catch { return false; } })());
+  check('client.js is a classic script (no top-level export)', !/^export /m.test(clientSrc) && clientSrc.includes('__ModuleLoader__'));
+  check('client.js uses settings.section slot, not addSection', clientSrc.includes("settings.section") && !clientSrc.includes('addSection') && !clientSrc.includes('addToggle') && !clientSrc.includes('addButton'));
+  check('client.js factory returns inject slots+locale', clientSrc.includes("inject = ['slots', 'locale']") && clientSrc.includes('module.exports.inject'));
+  check('client.js registers section id douyin-gonzalez with label', clientSrc.includes("id: 'douyin-gonzalez'") && clientSrc.includes('刷抖音（自写）'));
+  check('client.js panel talks to local settings server', clientSrc.includes('127.0.0.1:8765') && clientSrc.includes('/api/config') && clientSrc.includes('/api/health') && clientSrc.includes('/api/login/open'));
+  check('client.js panel has package toggles + health + login buttons', clientSrc.includes('togglePkg') && clientSrc.includes('一键体检') && clientSrc.includes('打开 Edge 登录抖音'));
+  check('package.json client inject lists slots + locale + runtime', ['@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-runtime'].every((s) => (pkg.dsh?.client?.inject ?? []).includes(s)) && !pkg.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings-general'));
+  check('settings server sends CORS for the panel fetch', fs.readFileSync(path.join(ROOT, 'settings', 'settings-server.mjs'), 'utf8').includes('Access-Control-Allow-Origin'));
 }
 
 // v0.3.2: README is honest about online install + release + fish.
@@ -571,13 +573,13 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   check('README documents GitHub clone install', readme.includes('git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git'));
   check('README says plainly npm is NOT published yet', readme.includes('还没发布到 npm'));
-  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.3.2'));
-  check('README documents git tag + gh release', readme.includes('git tag v0.3.2') && readme.includes('gh release create'));
+  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.3.3'));
+  check('README documents git tag + gh release', readme.includes('git tag v0.3.3') && readme.includes('gh release create'));
   check('README documents fish share as one-way only', readme.includes('单向分享') && readme.includes('不是双向实时对话'));
   check('README documents DSH native panel limits', readme.includes('DSH 本体是第三方的') && readme.includes('原生面板'));
   check('README documents auto-save', readme.includes('自动保存') && readme.includes('500ms'));
   check('README documents login on the first page', readme.includes('核心包最上面') || readme.includes('登录抖音'));
-  check('README version is 0.3.2', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.2）'));
+  check('README version is 0.3.3', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.3）'));
 }
 
 // Settings server really runs: save config -> read back identical,

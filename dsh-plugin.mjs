@@ -1,4 +1,4 @@
-// DSH plugin entry, v0.3.2. Modular: 5 packages, one master switch each.
+// DSH plugin entry, v0.3.3. Modular: 5 packages, one master switch each.
 //   core (always on) / interact / discover / publish / safety.
 // A tool whose package is OFF returns package-disabled and does nothing.
 // Write tools additionally pass the risk gate (safety.risk.paused):
@@ -319,7 +319,7 @@ async function runTool(toolName, args, dataDir) {
 export async function apply(ctx, config = {}) {
   const dataDir = config.dataDir ?? process.env.DSH_DOUYIN_DATA_DIR;
   const paths = dataPaths(dataDir);
-  console.log(`[dsh-douyin-gonzalez] loaded v0.3.2. data dir: ${paths.dir}`);
+  console.log(`[dsh-douyin-gonzalez] loaded v0.3.3. data dir: ${paths.dir}`);
 
   let defineTool = null;
   try { ({ defineTool } = await import('@deepseek-ai/dsh-tools')); } catch { defineTool = null; }
