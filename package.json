@@ -1,0 +1,66 @@
+{
+  "author": "Gonzalez",
+  "dependencies": {
+    "playwright": "^1.49.0"
+  },
+  "description": "DSH 抖音插件（自写，v0.3.1）：5 个包（核心/互动/发现/发片/安全），刷抖音 + 回私信 + 评论/点赞/分享/收藏/续火花 + 热榜/搜索 + 发视频/ComfyUI + 谷时巡检/风控/记忆 + AstrBot 互通 + 一键体检，白名单按抖音好友 id",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.bundle.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0",
+    "node": ">=22.13"
+  },
+  "exports": {
+    ".": "./dsh-plugin.mjs",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dsh-plugin.mjs",
+    "client.js",
+    "cordis.bundle.yml",
+    "lib/",
+    "settings/",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "douyin",
+    "browser-automation"
+  ],
+  "license": "MIT",
+  "main": "dsh-plugin.mjs",
+  "name": "dsh-douyin-gonzalez",
+  "os": [
+    "win32"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0 <0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "selfcheck": "node selfcheck.mjs",
+    "settings": "node settings/settings-server.mjs",
+    "test": "node selfcheck.mjs"
+  },
+  "type": "module",
+  "version": "0.3.1"
+}

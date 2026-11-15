@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>刷抖音 · 设置（自写插件 v0.3.1）</title>
+<style>
+  :root { --blue:#2563eb; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --card:#fff; --bg:#f3f4f6; --red:#b91c1c; --amber:#b45309; --green:#15803d; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, "Microsoft YaHei", sans-serif; max-width: 820px; margin: 0 auto; padding: 16px; line-height: 1.6; color: var(--ink); background: var(--bg); }
+  header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+  header h1 { font-size: 20px; margin: 0; }
+  header p { margin: 6px 0 0; opacity: .9; font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .card b { display: block; font-size: 13px; color: var(--muted); }
+  .card span { font-size: 16px; font-weight: 700; }
+  .card .ok { color: var(--green); } .card .bad { color: var(--red); } .card .warn { color: var(--amber); }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 8px 16px; cursor: pointer; font-size: 15px; }
+  .tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .pane { display: none; } .pane.active { display: block; }
+  .section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .section h2 { font-size: 16px; margin: 0 0 6px; }
+  .section h3 { font-size: 14px; margin: 14px 0 4px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .danger { color: var(--red); font-size: 13px; }
+  .warn { color: var(--amber); font-size: 13px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .row input[type=checkbox] { width: 22px; height: 22px; flex: none; cursor: pointer; }
+  .row label { cursor: pointer; flex: 1; min-width: 140px; }
+  .field { margin: 8px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .field label { min-width: 150px; }
+  .field input[type=number] { padding: 6px 8px; width: 80px; }
+  .field input[type=text], .field input[type=time] { padding: 6px 8px; }
+  .field input.wide { width: min(420px, 100%); }
+  .interests { width: 200px; padding: 6px; font-size: 13px; }
+  #status { margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; white-space: pre-wrap; }
+  button { font-size: 15px; padding: 10px 18px; margin-right: 8px; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  #saveBtn { background: var(--blue); color: #fff; border: none; }
+  .pack-off { opacity: .55; }
+  .sticky-nav { position: sticky; top: 10px; z-index: 50; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 8px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .sticky-nav .nav-label { font-size: 13px; color: var(--muted); padding: 0 4px; }
+  .sticky-nav button { font-size: 13px; padding: 6px 12px; margin-right: 0; border-radius: 999px; }
+  .sticky-nav button.nav-health { background: #0e7490; color: #fff; border-color: #0e7490; }
+  .pkg-purpose { background: #ecfeff; border-left: 4px solid #06b6d4; border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 0 0 12px; }
+  .budget-zone { background: #fefce8; border: 2px solid #eab308; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .budget-zone h2 { font-size: 16px; margin: 0 0 4px; }
+  .budget-zone .budget-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #fde68a; flex-wrap: wrap; }
+  .budget-zone .budget-row label { flex: 1; min-width: 120px; font-size: 15px; }
+  .budget-zone input[type=number] { font-size: 24px; font-weight: 800; width: 96px; padding: 4px 8px; text-align: center; }
+  .budget-zone .budget-total { font-size: 15px; font-weight: 700; margin-top: 8px; }
+  .budget-zone .budget-total .over { color: var(--red); }
+  .dep-off { opacity: .45; } .dep-off input { pointer-events: none; }
+  #healthSummary { margin: 10px 0; padding: 10px; border-radius: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; white-space: pre-wrap; }
+  #healthSummary.has-fail { background: #fef2f2; border-color: #fecaca; }
+  .health-item { padding: 8px; border-bottom: 1px solid var(--line); }
+  .health-item .fail { color: var(--red); font-weight: 700; }
+  .health-item .pass { color: var(--green); font-weight: 700; }
+  .health-item .unknown { color: var(--amber); font-weight: 700; }
+  @media (max-width: 640px) { .cards { grid-template-columns: repeat(2, 1fr); } .field label { min-width: 120px; } }
+</style>
+</head>
+<body>
+<header><h1>🐋 刷抖音 · 设置 <span style="opacity:.8;font-size:13px">v0.3.1 · 5 个包</span></h1>
+<p>自写插件 dsh-douyin-gonzalez。每个包一个总开关，关了就不加载、不跑定时器。所有写动作默认全关。改完点“保存全部设置”，只勾不保存 = 没保存。</p></header>
+
+<nav class="sticky-nav" id="stickyNav">
+  <span class="nav-label">📑 目录</span>
+  <button type="button" data-nav="core">🎯 核心包</button>
+  <button type="button" data-nav="interact">💬 互动包 · 点赞评论</button>
+  <button type="button" data-nav="discover">🔍 发现包</button>
+  <button type="button" data-nav="publish">🎬 发片包</button>
+  <button type="button" data-nav="safety">🛡️ 安全包</button>
+  <button type="button" class="nav-health" id="navHealthBtn">🩺 一键体检</button>
+</nav>
+
+<div class="cards">
+  <div class="card"><b>登录状态</b><span id="cardLogin">…</span></div>
+  <div class="card"><b>今日已用</b><span id="cardCounts">…</span></div>
+  <div class="card"><b>火花预警</b><span id="cardSpark">…</span></div>
+  <div class="card"><b>风控状态</b><span id="cardRisk">…</span></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="core" type="button">🎯 核心</button>
+  <button class="tab" data-tab="interact" type="button">💬 互动</button>
+  <button class="tab" data-tab="discover" type="button">🔍 发现</button>
+  <button class="tab" data-tab="publish" type="button">🎬 发片</button>
+  <button class="tab" data-tab="safety" type="button">🛡️ 安全</button>
+</div>
+
+<div>
+  <button id="refreshBtn" type="button">刷新列表</button>
+  <button id="saveBtn" type="button">💾 保存全部设置</button>
+</div>
+<div id="status">正在加载…</div>
+<p class="muted">数据文件：<code id="dataDir">…</code>（allowed.json / config.json）</p>
+
+<!-- ============ 核心 ============ -->
+<div class="pane active" id="pane-core">
+  <p class="pkg-purpose">🎯 核心包会干什么：只负责刷抖音和回白名单私信——看片、选片、回私信、写日报，别的什么都不动。</p>
+  <div class="section"><h2>🩺 一键体检</h2>
+    <p class="muted">真跑 12 项检查：Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控。跑完直接写通过几项、不通过哪几项，不通过的会写原因。</p>
+    <button id="healthBtn" type="button">▶ 运行一键体检</button>
+    <div id="healthSummary">还没体检。点上面按钮开始，跑完这里会写：通过几项、不通过哪几项。</div>
+    <div id="healthList"></div>
+  </div>
+  <div class="section"><h2>好友互动（白名单，按抖音好友 id）</h2>
+    <p class="muted">勾选 = 允许回私信 + 允许被分享。匹配按会话 id，不是昵称。每人填的“兴趣”用来决定分享给谁：视频文案命中了谁的兴趣，就分享给谁；没人命中就不分享。</p>
+    <div id="list"></div>
+    <h3>手动加人</h3>
+    <p class="muted">列表里没有那个人时，按会话 id 手动加。id 优先用 chats.json 里的 id；实在没有就填 <code>name:昵称</code>。</p>
+    <input id="manualId" placeholder="会话 id，例如 name:张三" style="width:280px;padding:8px;">
+    <input id="manualName" placeholder="显示名字" style="width:140px;padding:8px;">
+    <input id="manualInterests" class="interests" placeholder="兴趣，逗号分隔，例如 美食,宠物">
+    <button id="addBtn" type="button">加入名单</button>
+  </div>
+  <div class="section"><h2>刷抖音 · 选片与看片</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-watch-autoChoose" checked> 大肥鱼自己选片（默认打开）</label> 每轮 <input type="number" id="cfg-watch-minutesPerRound" min="1" max="120" value="10"> 分钟</div>
+    <div class="field"><label><input type="checkbox" id="cfg-watch-silent" checked> 静默观看（持续静音）</label><label><input type="checkbox" id="cfg-watch-minimize"> 刷的时候最小化窗口</label></div>
+    <div class="field"><label>长视频：超过</label> <input type="number" id="cfg-watch-skipOverMin" min="1" max="600" value="60"> 分钟就划走；超过 <input type="number" id="cfg-watch-skimOverMin" min="1" max="120" value="5"> 分钟就跳着看</div>
+    <div class="field"><label><input type="checkbox" id="cfg-watch-ocr"> 画面 OCR（Windows 自带思路，best-effort）</label><label><input type="checkbox" id="cfg-watch-transcript"> 音轨转写 Whisper（本地，未装就跳过）</label></div>
+    <div class="field"><label><input type="checkbox" id="cfg-watch-watchBeforeAct" checked> 动手前先真看片（转写/OCR 失败就跳过，不假装看完）</label></div>
+  </div>
+  <div class="section"><h2>回私信 · 每日次数</h2>
+    <div class="field"><label>白名单私信：每天最多</label> <input type="number" id="cfg-caps-dmReplyPerDay" min="0" max="50" value="5"> 条，每人每天 <input type="number" id="cfg-caps-dmReplyPerContactPerDay" min="0" max="10" value="1"> 条</div>
+    <p class="danger">陌生人回复默认关闭，和白名单回复分开计数。打开后陌生人也能收到回复，请想清楚再开。</p>
+    <div class="field"><label><input type="checkbox" id="cfg-strangerReply-enabled"> 回复陌生人私信（默认关闭）</label> 每天最多 <input type="number" id="cfg-strangerReply-perDay" min="0" max="20" value="3"> 条</div>
+  </div>
+</div>
+
+<!-- ============ 互动 ============ -->
+<div class="pane" id="pane-interact">
+  <p class="pkg-purpose">💬 互动包会干什么：负责对外动作——点赞、评论、分享、收藏、续火花，都是会动别人账号的东西，所以默认全关，要用哪个你亲手打开哪个。</p>
+  <div class="section"><h2>互动包总开关</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-packages-interact-enabled"> 开启互动包（默认关闭）</label><span class="muted">关了下面所有互动工具都不跑。</span></div>
+  </div>
+  <div class="budget-zone" data-pack="interact"><h2>💰 每日预算 · 单独看这里</h2>
+    <p class="muted">下面全是每天次数，大数字，改一次就生效（要点“保存全部设置”）。开关在各小节里，次数只在这里改，别处没有。</p>
+    <div class="budget-row"><label>自行评论</label><input type="number" id="cfg-autoComment-perDay" min="0" max="50" value="3"><span>条 / 天</span></div>
+    <div class="budget-row"><label>自行点赞</label><input type="number" id="cfg-autoLike-perDay" min="0" max="200" value="10"><span>次 / 天</span></div>
+    <div class="budget-row"><label>评论 @ 人</label><input type="number" id="cfg-commentMention-perDay" min="0" max="20" value="3"><span>条 / 天</span></div>
+    <div class="budget-row"><label>自行分享</label><input type="number" id="cfg-caps-sharePerDay" min="0" max="20" value="3"><span>次 / 天</span></div>
+    <div class="budget-row"><label>自动收藏</label><input type="number" id="cfg-favorite-perDay" min="0" max="50" value="5"><span>次 / 天</span></div>
+    <div class="budget-row"><label>私信发表情包</label><input type="number" id="cfg-sticker-perDay" min="0" max="50" value="5"><span>次 / 天</span></div>
+    <div class="budget-row"><label>自动续火花</label><input type="number" id="cfg-spark-perDay" min="0" max="20" value="3"><span>次 / 天</span></div>
+    <div class="budget-row"><label>回自己视频评论</label><input type="number" id="cfg-replyOwn-perDay" min="0" max="50" value="10"><span>条 / 天，每次</span><input type="number" id="cfg-replyOwn-perRun" min="0" max="20" value="3"><span>条</span></div>
+    <div class="budget-row"><label>全部对外动作总闸</label><input type="number" id="cfg-caps-totalOutwardPerDay" min="0" max="200" value="20"><span>次 / 天</span></div>
+    <div class="budget-total" id="budgetTotal">…</div>
+    <p class="muted">总闸 = 上面开着的对外动作每日次数合计的上限。超了体检会报不通过；工具各自的单项上限照常执行。</p>
+  </div>
+  <div class="section" data-pack="interact"><h2>自行评论 / 自行点赞</h2>
+    <p class="danger">⚠️ 危险动作：默认全部关着。只开你亲手点的那一个。</p>
+    <div class="field"><label><input type="checkbox" id="cfg-autoComment-enabled"> 自行评论（默认关闭）</label><span class="muted">同一视频只评论一次；每天次数见上方「每日预算」区。</span></div>
+    <div class="field"><label><input type="checkbox" id="cfg-autoLike-enabled"> 自行点赞（默认关闭）</label><span class="muted">同一视频只点赞一次；每天次数见上方「每日预算」区。</span></div>
+    <p class="muted">动作轮转：同一视频一天内点赞 / 评论 / 分享 / 收藏只做其一，别逮着一条薅。</p>
+    <h3>评论 @ 人</h3>
+    <div class="field"><label><input type="checkbox" id="cfg-commentMention-enabled"> 评论时 @ 人（默认关闭）</label> @ <input type="text" id="cfg-commentMention-mentionName" placeholder="要 @ 的名字，例如 你自己"></div>
+    <p class="muted">@ 评论和普通评论分开计数；每天次数见上方「每日预算」区。</p>
+  </div>
+  <div class="section" data-pack="interact"><h2>分享（白名单内，按兴趣挑人）</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-share-enabled"> 自行分享（默认关闭）</label><span class="muted">关了 = 一个都不分享；每天次数见上方「每日预算」区。</span></div>
+    <p class="muted">没有“群发所有人”的开关。同一视频 + 同一个人只分享一次，永久去重。</p>
+  </div>
+  <div class="section" data-pack="interact"><h2>收藏视频</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-favorite-enabled"> 自动收藏（默认关闭）</label><span class="muted">同一视频只收藏一次；每天次数见上方「每日预算」区。</span></div>
+  </div>
+  <div class="section" data-pack="interact"><h2>表情包 / 贴纸</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-sticker-enabled"> 私信发表情包（默认关闭）</label><span class="muted">每天次数见上方「每日预算」区。</span></div>
+    <p class="muted">按关键词从收藏的表情包里挑；没有收藏就按关键字兜底发文字，绝不假装发表了贴纸。收藏的表情包存在本地 stickers.json。</p>
+  </div>
+  <div class="section" data-pack="interact"><h2>续火花 🔥</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-spark-enabled"> 自动续火花（默认关闭）</label><span class="muted">每天次数见上方「每日预算」区。</span></div>
+    <div class="field"><label>几点发（逗号分隔）</label> <input type="text" class="wide" id="cfg-spark-times" value="08:00" placeholder="08:00,20:00"></div>
+    <div class="field"><label>快断预警：超过</label> <input type="number" id="cfg-spark-warnDays" min="0" max="7" value="1"> 天没联系就预警</div>
+    <div class="field"><label>一言文案（逗号分隔，随机发）</label> <input type="text" class="wide" id="cfg-spark-messages" value="在呢,今天看了个好玩的,火花别断呀"></div>
+    <p class="muted">续火花只能发给白名单里的人，每人设续不续在好友列表里勾选。</p>
+  </div>
+  <div class="section" data-pack="interact"><h2>回自己视频评论</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-replyOwn-enabled"> 自动回自己视频下的评论（默认关闭）</label><span class="muted">每天次数见上方「每日预算」区。</span></div>
+    <div class="field"><label>只看最近</label> <input type="number" id="cfg-replyOwn-days" min="1" max="30" value="3"> 天内的作品；
+      <label><input type="checkbox" id="cfg-replyOwn-random" checked> 随机挑</label>
+      <label><input type="checkbox" id="cfg-replyOwn-oncePerUser"> 同一个人只回一次</label></div>
+  </div>
+</div>
+
+<!-- ============ 发现 ============ -->
+<div class="pane" id="pane-discover">
+  <p class="pkg-purpose">🔍 发现包会干什么：负责找新内容——热榜、搜索、关注和指定博主，只看不发。</p>
+  <div class="section"><h2>发现包总开关</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-packages-discover-enabled"> 开启发现包（默认关闭）</label></div>
+  </div>
+  <div class="section" data-pack="discover"><h2>去哪刷（来源多选）</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-discover-feed" checked> 推荐流</label><label><input type="checkbox" id="cfg-discover-hot"> 热榜</label><label><input type="checkbox" id="cfg-discover-search"> 关键词搜索</label><label><input type="checkbox" id="cfg-discover-following"> 关注列表</label><label><input type="checkbox" id="cfg-discover-creators"> 指定博主</label></div>
+    <div class="field"><label>关键词（逗号分隔）</label> <input type="text" class="wide" id="cfg-discover-keywords" placeholder="AI,摄影,健身"></div>
+    <div class="field"><label>指定博主主页链接（逗号分隔）</label> <input type="text" class="wide" id="cfg-discover-creators" placeholder="https://www.douyin.com/user/…"></div>
+  </div>
+  <div class="section" data-pack="discover"><h2>创作者诊断（基础版）</h2>
+    <p class="muted">把播放 / 点赞 / 评论 / 完播摆出来，让鱼分析为什么没流量。不编流量池、不编账号分、不保证爆款。工具：dy_diagnose_creator。</p>
+  </div>
+  <div class="section" data-pack="discover"><h2>我的作品 / 数据总览</h2>
+    <p class="muted">工具 dy_my_posts：看最近发的视频和每条数据，读不到的数记 null，不编数字。</p>
+  </div>
+</div>
+
+<!-- ============ 发片 ============ -->
+<div class="pane" id="pane-publish">
+  <p class="pkg-purpose">🎬 发片包会干什么：负责发视频——发片、存草稿、从 ComfyUI 取成片，默认关，没给文件绝不发。</p>
+  <div class="section"><h2>发片包总开关</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-packages-publish-enabled"> 开启发片包（默认关闭）</label></div>
+  </div>
+  <div class="section" data-pack="publish"><h2>自行发抖音</h2>
+    <p class="danger">默认关闭（每天 0 次）。发视频必须在 DSH 里给一个本地视频文件路径，没有文件不发；每次发布都记进 post-log.jsonl。</p>
+    <div class="field"><label><input type="checkbox" id="cfg-autoPost-enabled"> 允许自行发抖音（默认关闭）</label> 每天最多 <input type="number" id="cfg-autoPost-perDay" min="0" max="10" value="0"> 条</div>
+    <div class="field"><label><input type="checkbox" id="cfg-publish-draftDefault" checked> 默认存草稿（正式发布去创作者中心点）</label></div>
+    <div class="field"><label>标题模板（{date} 会替换）</label> <input type="text" class="wide" id="cfg-publish-titleTemplate" value="大肥鱼的日常 {date}"></div>
+    <div class="field"><label>默认话题</label> <input type="text" class="wide" id="cfg-publish-defaultTags" placeholder="#日常 #大肥鱼"></div>
+  </div>
+  <div class="section" data-pack="publish"><h2>接 ComfyUI（可选）</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-comfyui-enabled"> 从 ComfyUI 取最新成片（默认关闭）</label></div>
+    <div class="field"><label>ComfyUI 地址</label> <input type="text" class="wide" id="cfg-comfyui-url" value="http://127.0.0.1:8188"></div>
+    <div class="field"><label>输出目录</label> <input type="text" class="wide" id="cfg-comfyui-outputDir" placeholder="例如 C:\ComfyUI\output"></div>
+    <p class="muted">没装 ComfyUI 就别开；开了没填目录，取最新成片会报“未配置”，不编文件。</p>
+  </div>
+</div>
+
+<!-- ============ 安全 ============ -->
+<div class="pane" id="pane-safety">
+  <p class="pkg-purpose">🛡️ 安全包会干什么：负责兜底——谷时、巡检、风控暂停、登录提醒和清理，出问题先停手。</p>
+  <div class="section"><h2>安全包总开关</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-packages-safety-enabled"> 开启安全包（默认关闭）</label></div>
+  </div>
+  <div class="section" data-pack="safety"><h2>登录状态</h2>
+    <p class="muted">登录掉了这里会红字提醒。点下面按钮在 Edge 里重新扫码登录。</p>
+    <div id="loginBox">…</div>
+    <button id="reloginBtn" type="button">重新扫码登录</button>
+  </div>
+  <div class="section" data-pack="safety"><h2>谷时自动刷 + 定时巡检</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-valley-enabled"> 谷时自动刷（默认关闭）</label>
+      <label><input type="checkbox" id="cfg-valley-noon" checked> 中午 12–14</label>
+      <label><input type="checkbox" id="cfg-valley-night" checked> 夜间 00:30–08:30</label></div>
+    <div class="field"><label>每天最多挑</label> <input type="number" id="cfg-valley-perDay" min="0" max="20" value="5"> 条，一次挑 <input type="number" id="cfg-valley-pickPerRound" min="1" max="10" value="2"> 条</div>
+    <div class="field"><label><input type="checkbox" id="cfg-patrol-enabled"> 定时巡检（默认关闭）</label> 每 <input type="number" id="cfg-patrol-intervalMin" min="5" max="240" value="30"> 分钟看一次，抖动 ±<input type="number" id="cfg-patrol-jitterPct" min="0" max="50" value="20">%</div>
+  </div>
+  <div class="section" data-pack="safety"><h2>风控提醒</h2>
+    <p class="muted">限流 / 验证码时立刻停手、记日志、不自动重发。暂停期间所有写动作都拒绝，直到你去 Edge 里人工确认没事，再点下面解除。</p>
+    <div id="riskBox">…</div>
+    <button id="clearRiskBtn" type="button">解除风控暂停</button>
+  </div>
+  <div class="section" data-pack="safety"><h2>一键清理</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-cleanup-enabled" checked> 允许一键清理</label> 删 <input type="number" id="cfg-cleanup-retentionDays" min="1" max="365" value="30"> 天前的缩略图 / 音轨 / 老日报</div>
+    <button id="cleanupBtn" type="button">现在清理一次（先演练）</button>
+    <p class="muted">不碰 config、allowed.json、当天日志和 Edge profile。</p>
+  </div>
+  <div class="section" data-pack="safety"><h2>抖音专属记忆</h2>
+    <div class="field"><label><input type="checkbox" id="cfg-memory-enabled"> 开启抖音专属记忆（默认关闭）</label></div>
+    <p class="muted">记在 memory/YYYY-MM.md：看过谁、跟谁聊过、谁喜欢什么。和大肥鱼的家记忆分开，只记抖音这边的事。工具：dy_memory。</p>
+    <div id="memoryBox">…</div>
+  </div>
+  <div class="section"><h2>AstrBot 互通（可选，默认关闭）</h2>
+    <p class="muted">桥只监听 127.0.0.1，AstrBot 必须带 token 才能调。没设 token 时桥拒绝启动。</p>
+    <div class="field"><label><input type="checkbox" id="cfg-astrbot-enabled"> 开启 AstrBot 桥（默认关闭）</label> 端口 <input type="number" id="cfg-astrbot-port" min="1024" max="65535" value="8766"></div>
+    <div class="field"><label>桥 token（必填，没填桥起不来）</label> <input type="text" class="wide" id="cfg-astrbot-token" placeholder="自己编一个长一点的，例如 douyin-bridge-xxxx"></div>
+    <div class="field"><label>事件 webhook（可选）</label> <input type="text" class="wide" id="cfg-astrbot-webhookUrl" placeholder="http://127.0.0.1:端口/你的事件地址，留空 = 不推送"></div>
+    <p class="muted">AstrBot 可调：<code>GET /astrbot/status</code>、<code>POST /astrbot/watch</code>、<code>POST /astrbot/dm-reply</code>、<code>POST /astrbot/report</code>。详情见 README 的 AstrBot 一节。</p>
+  </div>
+</div>
+
+<script>
+let chats = [];
+let allowed = new Map();
+let config = null;
+
+function setStatus(text) { document.getElementById('status').textContent = text; }
+function num(id, fallback) { const el = document.getElementById(id); if (!el) return fallback; const n = Number(el.value); return Number.isFinite(n) ? n : fallback; }
+function bool(id) { const el = document.getElementById(id); return el ? el.checked : false; }
+function txt(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+function activateTab(name) {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
+  document.querySelectorAll('.pane').forEach((x) => x.classList.toggle('active', x.id === 'pane-' + name));
+  document.getElementById('pane-' + name).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+document.querySelectorAll('#stickyNav [data-nav]').forEach((b) => b.addEventListener('click', () => activateTab(b.dataset.nav)));
+
+// 开关门控次数框：开关关着，对应的每日次数框置灰、点不动。
+const DEP_MAP = [
+  ['cfg-autoComment-enabled', ['cfg-autoComment-perDay']],
+  ['cfg-autoLike-enabled', ['cfg-autoLike-perDay']],
+  ['cfg-commentMention-enabled', ['cfg-commentMention-perDay', 'cfg-commentMention-mentionName']],
+  ['cfg-share-enabled', ['cfg-caps-sharePerDay']],
+  ['cfg-favorite-enabled', ['cfg-favorite-perDay']],
+  ['cfg-sticker-enabled', ['cfg-sticker-perDay']],
+  ['cfg-spark-enabled', ['cfg-spark-perDay', 'cfg-spark-times', 'cfg-spark-warnDays', 'cfg-spark-messages']],
+  ['cfg-replyOwn-enabled', ['cfg-replyOwn-perDay', 'cfg-replyOwn-perRun']],
+  ['cfg-strangerReply-enabled', ['cfg-strangerReply-perDay']],
+  ['cfg-autoPost-enabled', ['cfg-autoPost-perDay']],
+];
+function applyDep() {
+  for (const [swId, inputIds] of DEP_MAP) {
+    const on = bool(swId);
+    for (const id of inputIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.disabled = !on;
+      el.closest('.field, .budget-row')?.classList.toggle('dep-off', !on);
+    }
+  }
+  updateBudgetTotal();
+}
+function updateBudgetTotal() {
+  const el = document.getElementById('budgetTotal');
+  if (!el) return;
+  const pairs = [
+    ['cfg-autoLike-enabled', 'cfg-autoLike-perDay'], ['cfg-autoComment-enabled', 'cfg-autoComment-perDay'],
+    ['cfg-commentMention-enabled', 'cfg-commentMention-perDay'], ['cfg-share-enabled', 'cfg-caps-sharePerDay'],
+    ['cfg-favorite-enabled', 'cfg-favorite-perDay'], ['cfg-sticker-enabled', 'cfg-sticker-perDay'],
+    ['cfg-spark-enabled', 'cfg-spark-perDay'], ['cfg-replyOwn-enabled', 'cfg-replyOwn-perDay'],
+  ];
+  let sum = 0;
+  for (const [sw, n] of pairs) if (bool(sw)) sum += num(n, 0);
+  const total = num('cfg-caps-totalOutwardPerDay', 20);
+  el.innerHTML = `开着的对外动作每日合计：<b>${sum}</b> 次 / 总闸 <b>${total}</b> 次${sum > total ? ' <span class="over">⚠️ 已超总闸，体检会报不通过</span>' : ' ✅ 没超'}`;
+}
+document.addEventListener('change', (e) => { if (e.target?.type === 'checkbox' || e.target?.type === 'number') applyDep(); });
+
+async function runHealth() {
+  const btn = document.getElementById('healthBtn');
+  const summary = document.getElementById('healthSummary');
+  const list = document.getElementById('healthList');
+  btn.disabled = true;
+  summary.textContent = '正在体检…（Edge 登录那项要去 Edge 里探一次，稍等）';
+  summary.classList.remove('has-fail');
+  list.innerHTML = '';
+  try {
+    const r = await fetch('/api/health', { method: 'POST' }).then((x) => x.json());
+    if (!r.checks) { summary.textContent = `体检没跑起来：${r.message || '接口没通'}`; return; }
+    summary.textContent = r.summary;
+    summary.classList.toggle('has-fail', r.failed > 0);
+    list.innerHTML = r.checks.map((c) => {
+      const icon = c.status === 'pass' ? '✅' : c.status === 'fail' ? '❌' : '❓';
+      return `<div class="health-item"><span class="${c.status}">${icon} ${c.name}</span><br><span class="muted">${c.detail}</span></div>`;
+    }).join('');
+  } catch (e) {
+    summary.textContent = `体检接口没通：${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById('healthBtn').addEventListener('click', runHealth);
+document.getElementById('navHealthBtn').addEventListener('click', () => { activateTab('core'); runHealth(); });
+
+function readConfigFromPage() {
+  return {
+    packages: {
+      core: { enabled: true },
+      interact: { enabled: bool('cfg-packages-interact-enabled') },
+      discover: { enabled: bool('cfg-packages-discover-enabled') },
+      publish: { enabled: bool('cfg-packages-publish-enabled') },
+      safety: { enabled: bool('cfg-packages-safety-enabled') },
+    },
+    autoComment: { enabled: bool('cfg-autoComment-enabled'), perDay: num('cfg-autoComment-perDay', 3) },
+    autoLike: { enabled: bool('cfg-autoLike-enabled'), perDay: num('cfg-autoLike-perDay', 10) },
+    strangerReply: { enabled: bool('cfg-strangerReply-enabled'), perDay: num('cfg-strangerReply-perDay', 3) },
+    caps: {
+      dmReplyPerDay: num('cfg-caps-dmReplyPerDay', 5), dmReplyPerContactPerDay: num('cfg-caps-dmReplyPerContactPerDay', 1),
+      sharePerDay: num('cfg-caps-sharePerDay', 3), likePerDay: num('cfg-autoLike-perDay', 10), commentPerDay: num('cfg-autoComment-perDay', 3),
+      postPerDay: num('cfg-autoPost-perDay', 0), favoritePerDay: num('cfg-favorite-perDay', 5), stickerPerDay: num('cfg-sticker-perDay', 5),
+      sparkPerDay: num('cfg-spark-perDay', 3), replyOwnPerDay: num('cfg-replyOwn-perDay', 10), replyOwnPerRun: num('cfg-replyOwn-perRun', 3),
+      mentionPerDay: num('cfg-commentMention-perDay', 3), totalOutwardPerDay: num('cfg-caps-totalOutwardPerDay', 20),
+    },
+    share: { enabled: bool('cfg-share-enabled') },
+    autoPost: { enabled: bool('cfg-autoPost-enabled'), perDay: num('cfg-autoPost-perDay', 0) },
+    watch: { autoChoose: bool('cfg-watch-autoChoose'), minutesPerRound: num('cfg-watch-minutesPerRound', 10), silent: bool('cfg-watch-silent'), minimize: bool('cfg-watch-minimize'), skipOverMin: num('cfg-watch-skipOverMin', 60), skimOverMin: num('cfg-watch-skimOverMin', 5), ocr: bool('cfg-watch-ocr'), transcript: bool('cfg-watch-transcript'), watchBeforeAct: bool('cfg-watch-watchBeforeAct') },
+    astrbot: { enabled: bool('cfg-astrbot-enabled'), port: num('cfg-astrbot-port', 8766), token: txt('cfg-astrbot-token'), webhookUrl: txt('cfg-astrbot-webhookUrl') },
+    commentMention: { enabled: bool('cfg-commentMention-enabled'), perDay: num('cfg-commentMention-perDay', 3), mentionName: txt('cfg-commentMention-mentionName') },
+    favorite: { enabled: bool('cfg-favorite-enabled'), perDay: num('cfg-favorite-perDay', 5) },
+    sticker: { enabled: bool('cfg-sticker-enabled'), perDay: num('cfg-sticker-perDay', 5) },
+    spark: { enabled: bool('cfg-spark-enabled'), perDay: num('cfg-spark-perDay', 3), times: txt('cfg-spark-times').split(/[,，]/).map((s) => s.trim()).filter(Boolean), warnDays: num('cfg-spark-warnDays', 1), messages: txt('cfg-spark-messages').split(/[,，]/).map((s) => s.trim()).filter(Boolean) },
+    replyOwn: { enabled: bool('cfg-replyOwn-enabled'), perDay: num('cfg-replyOwn-perDay', 10), perRun: num('cfg-replyOwn-perRun', 3), days: num('cfg-replyOwn-days', 3), random: bool('cfg-replyOwn-random'), oncePerUser: bool('cfg-replyOwn-oncePerUser') },
+    discover: { sources: { feed: bool('cfg-discover-feed'), hot: bool('cfg-discover-hot'), search: bool('cfg-discover-search'), following: bool('cfg-discover-following'), creators: bool('cfg-discover-creators') }, keywords: txt('cfg-discover-keywords').split(/[,，]/).map((s) => s.trim()).filter(Boolean), creators: txt('cfg-discover-creators').split(/[,，]/).map((s) => s.trim()).filter(Boolean) },
+    publish: { draftDefault: bool('cfg-publish-draftDefault'), titleTemplate: txt('cfg-publish-titleTemplate'), defaultTags: txt('cfg-publish-defaultTags') },
+    comfyui: { enabled: bool('cfg-comfyui-enabled'), url: txt('cfg-comfyui-url'), outputDir: txt('cfg-comfyui-outputDir') },
+    valley: { enabled: bool('cfg-valley-enabled'), noon: bool('cfg-valley-noon'), night: bool('cfg-valley-night'), perDay: num('cfg-valley-perDay', 5), pickPerRound: num('cfg-valley-pickPerRound', 2) },
+    patrol: { enabled: bool('cfg-patrol-enabled'), intervalMin: num('cfg-patrol-intervalMin', 30), jitterPct: num('cfg-patrol-jitterPct', 20) },
+    risk: { enabled: true, paused: config?.risk?.paused ?? false, lastRisk: config?.risk?.lastRisk ?? null },
+    login: config?.login ?? { lastCheckedAt: null, loggedIn: null },
+    cleanup: { enabled: bool('cfg-cleanup-enabled'), retentionDays: num('cfg-cleanup-retentionDays', 30) },
+    memory: { enabled: bool('cfg-memory-enabled') },
+  };
+}
+
+function writeConfigToPage(c) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.checked = Boolean(v); };
+  const setNum = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+  set('cfg-packages-interact-enabled', c.packages?.interact?.enabled); set('cfg-packages-discover-enabled', c.packages?.discover?.enabled);
+  set('cfg-packages-publish-enabled', c.packages?.publish?.enabled); set('cfg-packages-safety-enabled', c.packages?.safety?.enabled);
+  set('cfg-autoComment-enabled', c.autoComment.enabled); setNum('cfg-autoComment-perDay', c.autoComment.perDay);
+  set('cfg-autoLike-enabled', c.autoLike.enabled); setNum('cfg-autoLike-perDay', c.autoLike.perDay);
+  set('cfg-strangerReply-enabled', c.strangerReply.enabled); setNum('cfg-strangerReply-perDay', c.strangerReply.perDay);
+  setNum('cfg-caps-dmReplyPerDay', c.caps.dmReplyPerDay); setNum('cfg-caps-dmReplyPerContactPerDay', c.caps.dmReplyPerContactPerDay);
+  setNum('cfg-caps-sharePerDay', c.caps.sharePerDay); setNum('cfg-caps-totalOutwardPerDay', c.caps.totalOutwardPerDay ?? 20);
+  set('cfg-share-enabled', c.share.enabled);
+  set('cfg-autoPost-enabled', c.autoPost.enabled); setNum('cfg-autoPost-perDay', c.autoPost.perDay);
+  set('cfg-watch-autoChoose', c.watch.autoChoose); setNum('cfg-watch-minutesPerRound', c.watch.minutesPerRound);
+  set('cfg-watch-silent', c.watch.silent); set('cfg-watch-minimize', c.watch.minimize);
+  setNum('cfg-watch-skipOverMin', c.watch.skipOverMin); setNum('cfg-watch-skimOverMin', c.watch.skimOverMin);
+  set('cfg-watch-ocr', c.watch.ocr); set('cfg-watch-transcript', c.watch.transcript); set('cfg-watch-watchBeforeAct', c.watch.watchBeforeAct);
+  set('cfg-astrbot-enabled', c.astrbot.enabled); setNum('cfg-astrbot-port', c.astrbot.port);
+  setTxt('cfg-astrbot-token', c.astrbot.token); setTxt('cfg-astrbot-webhookUrl', c.astrbot.webhookUrl);
+  set('cfg-commentMention-enabled', c.commentMention.enabled); setNum('cfg-commentMention-perDay', c.commentMention.perDay); setTxt('cfg-commentMention-mentionName', c.commentMention.mentionName);
+  set('cfg-favorite-enabled', c.favorite.enabled); setNum('cfg-favorite-perDay', c.favorite.perDay);
+  set('cfg-sticker-enabled', c.sticker.enabled); setNum('cfg-sticker-perDay', c.sticker.perDay);
+  set('cfg-spark-enabled', c.spark.enabled); setNum('cfg-spark-perDay', c.spark.perDay);
+  setTxt('cfg-spark-times', (c.spark.times || []).join(',')); setNum('cfg-spark-warnDays', c.spark.warnDays); setTxt('cfg-spark-messages', (c.spark.messages || []).join(','));
+  set('cfg-replyOwn-enabled', c.replyOwn.enabled); setNum('cfg-replyOwn-perDay', c.replyOwn.perDay); setNum('cfg-replyOwn-perRun', c.replyOwn.perRun);
+  setNum('cfg-replyOwn-days', c.replyOwn.days); set('cfg-replyOwn-random', c.replyOwn.random); set('cfg-replyOwn-oncePerUser', c.replyOwn.oncePerUser);
+  set('cfg-discover-feed', c.discover.sources.feed); set('cfg-discover-hot', c.discover.sources.hot); set('cfg-discover-search', c.discover.sources.search);
+  set('cfg-discover-following', c.discover.sources.following); set('cfg-discover-creators', c.discover.sources.creators);
+  setTxt('cfg-discover-keywords', (c.discover.keywords || []).join(',')); setTxt('cfg-discover-creators', (c.discover.creators || []).join(','));
+  set('cfg-publish-draftDefault', c.publish.draftDefault); setTxt('cfg-publish-titleTemplate', c.publish.titleTemplate); setTxt('cfg-publish-defaultTags', c.publish.defaultTags);
+  set('cfg-comfyui-enabled', c.comfyui.enabled); setTxt('cfg-comfyui-url', c.comfyui.url); setTxt('cfg-comfyui-outputDir', c.comfyui.outputDir);
+  set('cfg-valley-enabled', c.valley.enabled); set('cfg-valley-noon', c.valley.noon); set('cfg-valley-night', c.valley.night);
+  setNum('cfg-valley-perDay', c.valley.perDay); setNum('cfg-valley-pickPerRound', c.valley.pickPerRound);
+  set('cfg-patrol-enabled', c.patrol.enabled); setNum('cfg-patrol-intervalMin', c.patrol.intervalMin); setNum('cfg-patrol-jitterPct', c.patrol.jitterPct);
+  set('cfg-cleanup-enabled', c.cleanup.enabled); setNum('cfg-cleanup-retentionDays', c.cleanup.retentionDays);
+  set('cfg-memory-enabled', c.memory.enabled);
+  // Pack sections dim when their master switch is off.
+  document.querySelectorAll('[data-pack]').forEach((sec) => {
+    sec.classList.toggle('pack-off', !c.packages?.[sec.dataset.pack]?.enabled);
+  });
+  // Top cards.
+  const login = c.login || {};
+  const loginEl = document.getElementById('cardLogin');
+  loginEl.textContent = login.loggedIn === true ? '✅ 已登录' : login.loggedIn === false ? '❌ 未登录' : '❓ 未检查';
+  loginEl.className = login.loggedIn === true ? 'ok' : login.loggedIn === false ? 'bad' : 'warn';
+  document.getElementById('loginBox').innerHTML = login.loggedIn === false
+    ? '<p class="danger">❌ 抖音未登录：请点“重新扫码登录”，在 Edge 里扫码 / 过验证码。</p>'
+    : `<p class="muted">登录状态：${login.loggedIn === true ? '已登录' : '未检查（用 dy_login_status 查一次）'}${login.lastCheckedAt ? `，上次检查 ${login.lastCheckedAt}` : ''}</p>`;
+  const risk = c.risk || {};
+  const riskEl = document.getElementById('cardRisk');
+  riskEl.textContent = risk.paused ? '⏸️ 已暂停' : '✅ 正常';
+  riskEl.className = risk.paused ? 'bad' : 'ok';
+  document.getElementById('riskBox').innerHTML = risk.paused
+    ? `<p class="danger">⏸️ 风控暂停中：${risk.lastRisk ?? ''}。所有写动作已停手。</p>`
+    : '<p class="muted">风控正常，没有暂停。</p>';
+  document.getElementById('cardSpark').textContent = c.spark?.enabled ? `开，每天 ${c.spark.perDay} 次` : '未开启';
+  document.getElementById('memoryBox').innerHTML = `<p class="muted">${c.memory?.enabled ? '抖音专属记忆已开启，记在 memory/YYYY-MM.md。' : '抖音专属记忆未开启。'}</p>`;
+  applyDep();
+}
+
+async function load() {
+  setStatus('正在加载…');
+  const [chatsRes, allowedRes, configRes, statusRes] = await Promise.all([
+    fetch('/api/chats').then((r) => r.json()),
+    fetch('/api/allowed').then((r) => r.json()),
+    fetch('/api/config').then((r) => r.json()),
+    fetch('/api/status').then((r) => r.json()).catch(() => null),
+  ]);
+  chats = chatsRes.chats || [];
+  allowed = new Map((allowedRes.allowed || []).map((a) => [a.id, { ...a, interests: a.interests || [] }]));
+  config = configRes;
+  document.getElementById('dataDir').textContent = allowedRes.file || '';
+  if (statusRes) {
+    document.getElementById('cardCounts').textContent = `私信 ${statusRes.replies?.total ?? 0} · 赞 ${statusRes.actions?.like ?? 0} · 评 ${statusRes.actions?.comment ?? 0} · 分享 ${statusRes.actions?.share ?? 0} · 发 ${statusRes.actions?.post ?? 0}`;
+  }
+  writeConfigToPage(config);
+  render();
+  setStatus(`已加载：${chats.length} 个会话，许可名单里 ${allowed.size} 人。\n上次保存：${allowedRes.updatedAt || '（从未保存）'}\n改完必须点“保存全部设置”，只勾不保存 = 没保存，重启后会丢。`);
+}
+
+function render() {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  if (!chats.length) {
+    list.innerHTML = '<p>列表是空的。先在 DSH 里用 dy_list_chats 工具读一次私信列表（要先在 Edge 里登录抖音），再点“刷新列表”。</p>';
+    return;
+  }
+  for (const c of chats) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = 'cb-' + c.id;
+    cb.checked = allowed.has(c.id);
+    cb.addEventListener('change', () => {
+      if (cb.checked) allowed.set(c.id, { id: c.id, name: c.name, kind: c.kind, interests: allowed.get(c.id)?.interests || [] });
+      else allowed.delete(c.id);
+      setStatus(`已勾选 ${allowed.size} 人 —— 还没保存！点“保存全部设置”才算数。`);
+    });
+    const label = document.createElement('label');
+    label.htmlFor = cb.id;
+    label.textContent = `${c.name}（${c.kind === 'group' ? '群聊' : '私信'}）${c.lastMessage ? ' — ' + c.lastMessage : ''}`;
+    const interests = document.createElement('input');
+    interests.className = 'interests';
+    interests.placeholder = '兴趣，逗号分隔';
+    interests.value = (allowed.get(c.id)?.interests || []).join(',');
+    interests.addEventListener('input', () => {
+      const cur = allowed.get(c.id);
+      if (cur) cur.interests = interests.value.split(/[,，、]/).map((s) => s.trim()).filter(Boolean);
+    });
+    row.appendChild(cb); row.appendChild(label); row.appendChild(interests);
+    if (!c.stableId) {
+      const w = document.createElement('span');
+      w.className = 'warn';
+      w.textContent = 'id 是按名字拼的，改名会失效';
+      row.appendChild(w);
+    }
+    list.appendChild(row);
+  }
+}
+
+async function save() {
+  const items = [];
+  for (const a of allowed.values()) items.push({ id: a.id, name: a.name, kind: a.kind, interests: a.interests || [] });
+  const cfg = readConfigFromPage();
+  setStatus('正在保存…');
+  const [allowedRes, configRes] = await Promise.all([
+    fetch('/api/allowed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed: items }) }).then((r) => r.json()),
+    fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) }).then((r) => r.json()),
+  ]);
+  if (allowedRes.ok && configRes.ok) {
+    const rb = configRes.readBack;
+    setStatus(`✅ 保存成功，并已从文件再读一遍核对：\n许可名单文件里 ${allowedRes.readBack.allowed.length} 人；包开关：互动 ${rb.packages.interact.enabled ? '开' : '关'} / 发现 ${rb.packages.discover.enabled ? '开' : '关'} / 发片 ${rb.packages.publish.enabled ? '开' : '关'} / 安全 ${rb.packages.safety.enabled ? '开' : '关'}。\n现在可以重启 DSH，回来这里勾选和开关应该还在。`);
+  } else {
+    setStatus(`❌ 保存失败：名单 ${allowedRes.ok ? 'OK' : (allowedRes.message || '失败')}；配置 ${configRes.ok ? 'OK' : (configRes.message || '失败')}。名单没有变，请再试一次或看服务器终端。`);
+  }
+  await load();
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+document.getElementById('saveBtn').addEventListener('click', save);
+document.getElementById('addBtn').addEventListener('click', () => {
+  const id = document.getElementById('manualId').value.trim();
+  const name = document.getElementById('manualName').value.trim() || id.replace(/^name:/, '');
+  const interests = document.getElementById('manualInterests').value.split(/[,，、]/).map((s) => s.trim()).filter(Boolean);
+  if (!id) { setStatus('先填会话 id。'); return; }
+  allowed.set(id, { id, name, kind: 'dm', interests });
+  if (!chats.some((c) => c.id === id)) chats.push({ id, name, kind: 'dm', lastMessage: '', stableId: false });
+  render();
+  setStatus(`已把 ${name} 加入勾选（还没保存，点“保存全部设置”才算数）。`);
+});
+document.getElementById('reloginBtn').addEventListener('click', async () => {
+  setStatus('正在打开 Edge 登录窗口…（请在 Edge 里扫码）');
+  const r = await fetch('/api/login/open', { method: 'POST' }).then((x) => x.json()).catch(() => ({ ok: false, message: '接口没通' }));
+  setStatus(r.ok ? '已打开 Edge，请在窗口里扫码登录，登录完点“刷新列表”。' : `打开失败：${r.message || ''}`);
+});
+document.getElementById('clearRiskBtn').addEventListener('click', async () => {
+  const r = await fetch('/api/risk/clear', { method: 'POST' }).then((x) => x.json()).catch(() => ({ ok: false }));
+  setStatus(r.ok ? '✅ 风控暂停已解除。先确认 Edge 里没事再继续用写动作。' : '解除失败，请看服务器终端。');
+  await load();
+});
+document.getElementById('cleanupBtn').addEventListener('click', async () => {
+  const r = await fetch('/api/cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dryRun: true }) }).then((x) => x.json()).catch(() => ({ ok: false }));
+  setStatus(r.ok ? `演练：会删 ${r.removed} 个过期文件（${r.retentionDays} 天前）。确认要真删，在 DSH 里调 dy_cleanup。` : '清理接口没通。');
+});
+
+load();
+</script>
+</body>
+</html>
