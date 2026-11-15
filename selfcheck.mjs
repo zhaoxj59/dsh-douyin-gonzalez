@@ -23,7 +23,7 @@ function check(name, ok, detail = '') {
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 check('package.json name', pkg.name === 'dsh-douyin-gonzalez', pkg.name);
-check('package.json version 0.3.3', pkg.version === '0.3.3', pkg.version);
+check('package.json version 0.3.4', pkg.version === '0.3.4', pkg.version);
 check('package.json type module', pkg.type === 'module');
 check('dsh.bundle.patch points at cordis.bundle.yml', pkg.dsh?.bundle?.patch === './cordis.bundle.yml');
 check('dsh.client platform web', pkg.dsh?.client?.platform === 'web');
@@ -63,6 +63,7 @@ check('dy_post requires file', (() => {
 {
   const registered = [];
   const fakeCtx = { tools: { register: (tool) => registered.push(tool.name) } };
+  process.env.DSH_DOUYIN_AUTO_SETTINGS = '0'; // 自检不自动起 8765，否则进程挂住退不出
   await entry.apply(fakeCtx, { dataDir: path.join(os.tmpdir(), 'dy-gonzalez-selfcheck') });
   check('tool dy_health_check gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_health_check')?.pkg === 'core');
 check('apply() registers 33 tools on fake ctx.tools', registered.length === 33, registered.join(', '));
@@ -568,18 +569,40 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   check('settings server sends CORS for the panel fetch', fs.readFileSync(path.join(ROOT, 'settings', 'settings-server.mjs'), 'utf8').includes('Access-Control-Allow-Origin'));
 }
 
+// v0.3.4: settings server auto-starts when the plugin loads.
+// apply() with DSH_DOUYIN_AUTO_SETTINGS=0 must NOT start it (selfcheck
+// guard above); startSettingsServer() on a test port must answer /api/status.
+{
+  const srvSrc = fs.readFileSync(path.join(ROOT, 'settings', 'settings-server.mjs'), 'utf8');
+  check('settings server exports startSettingsServer', srvSrc.includes('export function startSettingsServer'));
+  check('settings server only listens on direct run', srvSrc.includes('isDirectRun'));
+  check('plugin apply() auto-starts settings server unless opted out', fs.readFileSync(path.join(ROOT, 'dsh-plugin.mjs'), 'utf8').includes('startSettingsServer') && fs.readFileSync(path.join(ROOT, 'dsh-plugin.mjs'), 'utf8').includes('DSH_DOUYIN_AUTO_SETTINGS'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-auto-'));
+  process.env.DSH_DOUYIN_DATA_DIR = tmp;
+  const { startSettingsServer } = await import('./settings/settings-server.mjs');
+  const srv = await startSettingsServer(18766);
+  check('startSettingsServer listens on the given port', Boolean(srv));
+  if (srv) {
+    const res = await fetch('http://127.0.0.1:18766/api/status');
+    const body = await res.json();
+    check('auto-started server answers /api/status', res.status === 200 && typeof body === 'object' && 'actions' in body);
+    await new Promise((r) => srv.close(r));
+  }
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
 // v0.3.2: README is honest about online install + release + fish.
 {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
   check('README documents GitHub clone install', readme.includes('git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git'));
   check('README says plainly npm is NOT published yet', readme.includes('还没发布到 npm'));
-  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.3.3'));
-  check('README documents git tag + gh release', readme.includes('git tag v0.3.3') && readme.includes('gh release create'));
+  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.3.4'));
+  check('README documents git tag + gh release', readme.includes('git tag v0.3.4') && readme.includes('gh release create'));
   check('README documents fish share as one-way only', readme.includes('单向分享') && readme.includes('不是双向实时对话'));
   check('README documents DSH native panel limits', readme.includes('DSH 本体是第三方的') && readme.includes('原生面板'));
   check('README documents auto-save', readme.includes('自动保存') && readme.includes('500ms'));
   check('README documents login on the first page', readme.includes('核心包最上面') || readme.includes('登录抖音'));
-  check('README version is 0.3.3', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.3）'));
+  check('README version is 0.3.4', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.4）'));
 }
 
 // Settings server really runs: save config -> read back identical,

@@ -1,17 +1,21 @@
-# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.3）
+# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.4）
 
 刷抖音 + 回私信 + 互动 + 发现 + 发片 + 安全，**5 个包分开装、各自一个总开关**。好友许可名单用真实勾选 + 显式保存，按抖音好友 id 匹配。这是为了解决 LockyBee `dsh-douyin-browser-local` 1.4.7 上用户遇到的问题：私信列表读得到，但点选不了 / 选完不保存。
 
 > 第三方插件，不是 DeepSeek 官方发行版。抖音登录只留在本机 Edge 里，本插件不读、不存、不发任何 Cookie / 密码。
 
+## v0.3.4：设置服务自动起，不用手动跑 npm run settings
+
+插件加载时自动在 127.0.0.1:8765 起设置服务，DSH 设置里的面板一打开就有数据。端口已被占（服务已在跑）时不报错，直接用现成的。`DSH_DOUYIN_AUTO_SETTINGS=0` 可关掉自动起，关掉后还是手动跑 `npm run settings`。
+
 ## v0.3.3：原生面板真挂上了（v0.3.2 的挂接写法是错的）
 
-v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没出现，不是你装错了。v0.3.3 按已上线插件同款写法重做了 `client.js`：经典脚本 + `__ModuleLoader__.load`，factory 返回 `{ apply, inject: ['slots', 'locale'] }`，用 `ctx.slots.inject('settings.section', …)` 注册 React 组件；`package.json` 的 `dsh.client.inject` 改成 slots/locale/runtime/settings。面板里有 5 个包开关、今天回复数和登录状态、登录/体检/刷新/完整设置页四个按钮，面板通过 fetch 跟本地设置服务说话（设置服务已加 CORS）。**面板要显示内容，得先跑设置服务**（`npm run settings`）。
+v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没出现，不是你装错了。v0.3.4 按已上线插件同款写法重做了 `client.js`：经典脚本 + `__ModuleLoader__.load`，factory 返回 `{ apply, inject: ['slots', 'locale'] }`，用 `ctx.slots.inject('settings.section', …)` 注册 React 组件；`package.json` 的 `dsh.client.inject` 改成 slots/locale/runtime/settings。面板里有 5 个包开关、今天回复数和登录状态、登录/体检/刷新/完整设置页四个按钮，面板通过 fetch 跟本地设置服务说话（设置服务已加 CORS）。**面板要显示内容，得先跑设置服务**（`npm run settings`）。
 
 ## v0.3.3：用户提的 6 个问题，逐条落地
 
 1. **报错说人话**：playwright 没装时，以前只扔一句英文 `Cannot find package 'playwright'`。现在 `lib/browser.mjs` 里 import 失败就换成中文原因 + 一步一步的修法（进 `C:\dsh-douyin-gonzalez` 跑 `pnpm install`，装不上就开全局/TUN 再跑或改跑 `npm install`，装完看 `node_modules\playwright` 文件夹在不在）。体检里 Edge 登录那项、设置页 `/api/login/open`、工具 `dy_login_status` 都透传这份中文办法，设置页登录失败时也直接显示出来。
-2. **在线下载**：代码已按 npm 发布要求准备好（`package.json` 有 name/version/files/engines/license，加了 repository/homepage/bugs）。**但还没真的发布到 npm**——发布要用户自己的 npm 账号登录一次、跑 `npm publish`，这一步我做不了（没有用户的 npm 账号/Token），也没假装已发布。发布后的安装命令会是 `dsh plugin --profile web add dsh-douyin-gonzalez@0.3.3`。现在能在线装的办法是 GitHub clone（见“安装”一节），仓库：https://github.com/zhaoxj59/dsh-douyin-gonzalez 。打 Release 的办法也写在“安装”一节了（`git tag v0.3.3` + `gh release create`）。
+2. **在线下载**：代码已按 npm 发布要求准备好（`package.json` 有 name/version/files/engines/license，加了 repository/homepage/bugs）。**但还没真的发布到 npm**——发布要用户自己的 npm 账号登录一次、跑 `npm publish`，这一步我做不了（没有用户的 npm 账号/Token），也没假装已发布。发布后的安装命令会是 `dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4`。现在能在线装的办法是 GitHub clone（见“安装”一节），仓库：https://github.com/zhaoxj59/dsh-douyin-gonzalez 。打 Release 的办法也写在“安装”一节了（`git tag v0.3.4` + `gh release create`）。
 3. **内置到 DSH 里？做不到，但常用项收进了 DSH 原生面板**：DSH 本体是第三方的，改不了、塞不进去，这个没法假装。能做的上限是 DSH 客户端提供的设置注入点（`client.js`）：在 DSH 设置里挂一个“刷抖音（自写）”分区，放最常用的几项（核心包、危险动作总开关、白名单人数、一键体检、登录抖音）和完整设置页地址。5 个包的全部设置（几十个开关 + 数字 + 选人勾选）放不进原生面板，只能留在本地网页设置页（`http://127.0.0.1:8765/`）。所以：原生面板 = 快捷入口 + 常用开关；网页页 = 完整设置。`client.js` 里所有挂接都先判运行时有没有这个能力，没有就静默跳过，绝不拖垮插件本体。
 4. **登录放第一页**：设置页核心包最上面加了“🔑 登录抖音”一节：登录状态 + “打开 Edge 登录抖音”按钮 + 登录失败时显示第 1 条的中文修法。吸顶目录条里也加了“🔑 登录抖音”，一点就跳过去。安全包里原来的“重新扫码登录”保留，两处调同一个接口。
 5. **设置自动保存**：开关/数字/勾选一改就自动保存（500ms 防抖，调已有的 `POST /api/config` + `/api/allowed`），存成功顶部写“已自动保存 HH:MM:SS”，失败写红字原因；“保存全部设置”按钮还留着，当手动兜底。选人勾选也一样，勾完自动保存读回核对。
@@ -128,7 +132,7 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 - Node.js ≥ 22.13，DSH `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0`（与 LockyBee 1.4.7 相同的范围；DSH 0.2.2-rc.2 不在官方验证表里，见“未验证”）
 - 一个支持看图的模型（刷视频要看画面才有意义）
 
-## 安装 / 更新到 v0.3.3
+## 安装 / 更新到 v0.3.4
 
 ### 办法一：GitHub clone（现在就能在线装）
 
@@ -147,7 +151,7 @@ dsh plugin --profile web add link:C:\dsh-douyin-gonzalez
 代码已按 npm 发布要求准备好（name/version/files/engines/license/repository/homepage/bugs 齐全），但**还没发布到 npm**：发布要用户自己的 npm 账号登录一次、跑 `npm publish`，没有用户的 npm 账号/Token，这一步做不了。发布后安装命令会是：
 
 ```powershell
-dsh plugin --profile web add dsh-douyin-gonzalez@0.3.3
+dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4
 ```
 
 等 DSH 市场收录后，也可以直接在市场里搜 `dsh-douyin-gonzalez` 安装——同样还没收录，别去搜了，搜不到。
@@ -156,9 +160,9 @@ dsh plugin --profile web add dsh-douyin-gonzalez@0.3.3
 
 ```powershell
 cd C:\dsh-douyin-gonzalez
-git tag v0.3.3
-git push origin v0.3.3
-gh release create v0.3.3 --title "v0.3.3" --notes "友好报错、登录放第一页、自动保存、DSH 原生面板、大肥鱼记忆分享"
+git tag v0.3.4
+git push origin v0.3.4
+gh release create v0.3.4 --title "v0.3.4" --notes "友好报错、登录放第一页、自动保存、DSH 原生面板、大肥鱼记忆分享"
 ```
 
 ### 本地自检
@@ -171,7 +175,7 @@ node selfcheck.mjs
 
 `selfcheck.mjs` 不需要 DSH、不用登录抖音、不用联网（除 `pnpm install` 本身），跑完应全部 PASS。
 
-DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.3.3`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
+DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.3.4`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
 
 ```powershell
 dsh plugin --profile web add link:C:\path\to\dsh-douyin-gonzalez
@@ -198,7 +202,7 @@ dsh plugin --profile desktop add link:C:\path\to\dsh-douyin-gonzalez
 4. 在 Edge 里登录抖音：设置页 → 核心包最上面的“🔑 登录抖音” → 点“打开 Edge 登录抖音”，在 Edge 里扫码 / 过验证码。登录状态只留在本机 Edge 里。登录掉了，设置页会红字提醒；安全包里也有个“重新扫码登录”，同一个接口。
 5. 让大肥鱼调 `dy_watch` 开始刷；有新私信时，它只能给已许可的人回；想用互动/发现/发片/安全包的功能，先开包总开关。
 
-## 大肥鱼记忆互通（v0.3.3，单向分享）
+## 大肥鱼记忆互通（v0.3.4，单向分享）
 
 大肥鱼 = DSH 里的大肥鱼 dsh-fish，家在 `~/.dsh-fish/`，`events.jsonl` 是它自己的记忆源，**这个插件绝不动它**。
 
@@ -206,9 +210,9 @@ dsh plugin --profile desktop add link:C:\path\to\dsh-douyin-gonzalez
 - 体检第 13 项“大肥鱼记忆互通”只读检查：inbox.md 能不能写、最近一次抖音分享是什么时候。还没分享过报 unknown，不算失败。
 - **这只是单向分享记录，不是双向实时对话**：大肥鱼不会因为 inbox 里多了一条就主动来聊抖音。想让它聊，得在它的会话里问它（它读得到 inbox / 记忆）。
 
-## DSH 原生面板（v0.3.3，真挂上了——v0.3.2 写法是错的）
+## DSH 原生面板（v0.3.4，真挂上了——v0.3.2 写法是错的）
 
-v0.3.2 的面板挂接用错了 API（调了 DSH 里不存在的方法），所以设置里什么都没出现，**不是你装错了**。v0.3.3 按已上线插件同款写法重做了：`client.js` 是经典脚本、包在 `__ModuleLoader__.load` 里，factory 返回 `{ apply, inject: ['slots', 'locale'] }`，用 `ctx.slots.inject('settings.section', …)` 注册一个 React 组件，DSH 把它当设置页左侧“刷抖音（自写）”一项渲染出来；`package.json` 的 `dsh.client.inject` 也改成了 slots/locale/runtime/settings 四个。
+v0.3.2 的面板挂接用错了 API（调了 DSH 里不存在的方法），所以设置里什么都没出现，**不是你装错了**。v0.3.4 按已上线插件同款写法重做了：`client.js` 是经典脚本、包在 `__ModuleLoader__.load` 里，factory 返回 `{ apply, inject: ['slots', 'locale'] }`，用 `ctx.slots.inject('settings.section', …)` 注册一个 React 组件，DSH 把它当设置页左侧“刷抖音（自写）”一项渲染出来；`package.json` 的 `dsh.client.inject` 也改成了 slots/locale/runtime/settings 四个。
 
 面板里有：5 个包的开/关（核心包常驻）、今天回复数和登录状态、“打开 Edge 登录抖音”“一键体检”“刷新状态”“打开完整设置页”四个按钮。面板通过 fetch 跟本地设置服务说话，设置服务已加 CORS。**面板要显示内容，得先跑设置服务**（`npm run settings`，127.0.0.1:8765）；服务没跑时面板会红字提示，不假装有数据。5 个包的全部设置（几十个开关 + 数字 + 选人勾选）仍在完整网页设置页。原生面板挂不上时静默跳过，插件本体不受影响。
 
@@ -235,7 +239,7 @@ v0.3.2 的面板挂接用错了 API（调了 DSH 里不存在的方法），所�
 19. **来源多选**：发现包开、勾了热榜 + 搜索，调 `dy_watch_sources`，返回里应列出勾的来源。
 20. **AstrBot**：不变，见下。
 
-## 逐项测试方法（v0.3.3 新增）
+## 逐项测试方法（v0.3.4 新增）
 
 1. **友好报错**：在一台没装 playwright 的机器上调 `dy_login_status` 或在设置页点登录，应返回中文原因 + 一步一步的修法（`pnpm install`、看 `node_modules\playwright`），而不是只有 `Cannot find package 'playwright'` 一句英文。体检 Edge 那项也应带上这份中文办法。
 2. **登录在第一页**：打开设置页，核心包最上面就是“🔑 登录抖音”一节；点吸顶目录条里的“🔑 登录抖音”，应跳到这一节。安全包里的“重新扫码登录”还在，点它和点核心包的按钮是一样的。

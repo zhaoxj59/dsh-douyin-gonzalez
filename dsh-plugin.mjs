@@ -1,4 +1,4 @@
-// DSH plugin entry, v0.3.3. Modular: 5 packages, one master switch each.
+// DSH plugin entry, v0.3.4. Modular: 5 packages, one master switch each.
 //   core (always on) / interact / discover / publish / safety.
 // A tool whose package is OFF returns package-disabled and does nothing.
 // Write tools additionally pass the risk gate (safety.risk.paused):
@@ -319,7 +319,7 @@ async function runTool(toolName, args, dataDir) {
 export async function apply(ctx, config = {}) {
   const dataDir = config.dataDir ?? process.env.DSH_DOUYIN_DATA_DIR;
   const paths = dataPaths(dataDir);
-  console.log(`[dsh-douyin-gonzalez] loaded v0.3.3. data dir: ${paths.dir}`);
+  console.log(`[dsh-douyin-gonzalez] loaded v0.3.4. data dir: ${paths.dir}`);
 
   let defineTool = null;
   try { ({ defineTool } = await import('@deepseek-ai/dsh-tools')); } catch { defineTool = null; }
@@ -353,5 +353,18 @@ export async function apply(ctx, config = {}) {
     }
   } catch (e) {
     console.log(`[dsh-douyin-gonzalez] astrbot bridge failed to start (plugin still works): ${e.message}`);
+  }
+
+  // v0.3.4：插件加载时自动起设置服务（127.0.0.1:8765），面板不用
+  // 再手动跑 npm run settings。端口已被占就是服务已在跑，不报错。
+  // DSH_DOUYIN_AUTO_SETTINGS=0 可关掉自动起（自检用）。
+  if (process.env.DSH_DOUYIN_AUTO_SETTINGS !== '0') {
+    try {
+      const { startSettingsServer } = await import('./settings/settings-server.mjs');
+      const started = await startSettingsServer();
+      if (started) console.log('[dsh-douyin-gonzalez] settings server auto-started on 127.0.0.1:8765');
+    } catch (e) {
+      console.log(`[dsh-douyin-gonzalez] settings server auto-start failed (plugin still works; run npm run settings manually): ${e.message}`);
+    }
   }
 }

@@ -20,7 +20,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dataPaths } from '../lib/paths.mjs';
 import { loadAllowed, saveAllowed, readJson, actionCounts, replyCounts } from '../lib/store.mjs';
 import { loadConfig, saveConfig } from '../lib/config.mjs';
@@ -143,8 +143,24 @@ const server = http.createServer((req, res) => {
   json(res, 404, { ok: false, message: 'not found' });
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`[dsh-douyin-gonzalez] settings page: http://${HOST}:${PORT}/`);
-  console.log(`[dsh-douyin-gonzalez] data dir: ${dataPaths().dir}`);
-  console.log('[dsh-douyin-gonzalez] only listening on 127.0.0.1 — open it in a browser on this same computer.');
-});
+// v0.3.4：插件加载时自动起设置服务，不用再手动跑 npm run settings。
+// 直接跑 node settings/settings-server.mjs 时照旧直接监听；被插件
+// import 时只导出 startSettingsServer，由插件在 apply() 里调。
+// 端口已被占（服务已在跑）时不报错，返回 null，面板直接用现成的。
+export function startSettingsServer(port = PORT) {
+  return new Promise((resolve) => {
+    server.once('error', (e) => {
+      console.log(`[dsh-douyin-gonzalez] settings server not started (${e.code ?? e.message}) — panel will use the already-running one, or run: npm run settings`);
+      resolve(null);
+    });
+    server.listen(port, HOST, () => {
+      console.log(`[dsh-douyin-gonzalez] settings page: http://${HOST}:${port}/`);
+      console.log(`[dsh-douyin-gonzalez] data dir: ${dataPaths().dir}`);
+      console.log('[dsh-douyin-gonzalez] only listening on 127.0.0.1 — open it in a browser on this same computer.');
+      resolve(server);
+    });
+  });
+}
+
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) startSettingsServer();
