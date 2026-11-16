@@ -403,7 +403,7 @@ async function autoSaveNow() {
   }
 }
 // 打字（兴趣、名字、数字）也触发自动保存，同样防抖 500ms。
-document.addEventListener('input', (e) => { if (e.target?.matches('input[type=text], input[type=number], input[type=time]')) scheduleAutoSave(); });
+document.addEventListener('input', (e) => { if (e.target?.matches('input[type=text], input[type=password], input[type=number], input[type=time]')) scheduleAutoSave(); });
 
 async function runHealth() {
   const btn = document.getElementById('healthBtn');
