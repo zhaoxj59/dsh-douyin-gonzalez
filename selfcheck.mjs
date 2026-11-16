@@ -624,6 +624,9 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   check('settings page refresh button probes login before reloading', htmlSrc.includes('/api/login/refresh') && htmlSrc.includes('refreshLoginStatus'));
   const pluginSrc = fs.readFileSync(path.join(ROOT, 'dsh-plugin.mjs'), 'utf8');
   check('dy_login_status reuses refreshLoginStatus', pluginSrc.includes('refreshLoginStatus'));
+  const ps1Src = fs.readFileSync(path.join(ROOT, 'install-all.ps1'), 'utf8');
+  check('install-all.ps1 auto-installs Node when missing', ps1Src.includes('v22.23.5') && ps1Src.includes('msiexec') && ps1Src.includes('Get-Command node'));
+  check('install-all.ps1 is UTF-8 with BOM (PowerShell 5.1 reads it as UTF-8)', fs.readFileSync(path.join(ROOT, 'install-all.ps1')).subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])));
 }
 
 // v0.3.4: settings server auto-starts when the plugin loads.

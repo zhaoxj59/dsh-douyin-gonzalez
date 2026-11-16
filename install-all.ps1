@@ -19,10 +19,37 @@ if (-not $Force) {
   Read-Host '确认已退出，按回车继续（不想装了按 Ctrl+C）' | Out-Null
 }
 
+# v0.4.1: 没装 Node 就自己装上，免得再让用户多跑一趟。
+# 先找 PATH 和常见位置，找不到就下官方 Node v22 LTS 的 MSI 静默装。
+# 静默装要管理员权限；装不上就明说怎么重跑。
+$NodeExe = $null
+$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+if ($nodeCmd) { $NodeExe = $nodeCmd.Source }
+if (-not $NodeExe) {
+  foreach ($p in 'C:\Program Files\nodejs\node.exe', "$env:LOCALAPPDATA\Programs\nodejs\node.exe") {
+    if (Test-Path $p) { $NodeExe = $p; break }
+  }
+}
+if ($NodeExe) {
+  $env:Path = "$(Split-Path $NodeExe);$env:Path"
+  Write-Host "找到 Node：$NodeExe"
+} else {
+  Write-Host '没找到 Node，正在装 Node v22 LTS（官方 MSI，约 32MB）…'
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $msi = Join-Path $env:TEMP 'node-lts.msi'
+    Invoke-WebRequest 'https://nodejs.org/dist/v22.23.5/node-v22.23.5-x64.msi' -OutFile $msi
+    Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn" -Wait
+    if (Test-Path 'C:\Program Files\nodejs\node.exe') { $env:Path = "C:\Program Files\nodejs;$env:Path" }
+  } catch {
+    Write-Host "下载或安装 Node 时出错：$($_.Exception.Message)" -ForegroundColor Red
+  }
+}
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  Write-Host '没找到 node：请先装 Node LTS（>=22.19），再跑这个脚本。' -ForegroundColor Red
+  Write-Host '还是没找到 node：请右键 PowerShell 选“以管理员身份运行”，再跑一次这个脚本。' -ForegroundColor Red
   exit 1
 }
+node -v
 if (-not (Test-Path $AurabotData)) {
   Write-Host "没找到 Aurabot 数据目录：$AurabotData" -ForegroundColor Red
   Write-Host '先确认 DSH 和 Aurabot 装在这台电脑上，再跑这个脚本。'
