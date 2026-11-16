@@ -1,4 +1,4 @@
-# DSH 抖音插件 + Aurabot 桥接 — 一键卸载（Windows PowerShell）
+﻿# DSH 抖音插件 + Aurabot 桥接 — 一键卸载（Windows PowerShell）
 # 只拆 Aurabot 桥接模块 douyin-bridge（有备份就恢复旧版）；DSH 插件本体不动，需要再拆见下面提示。
 # 用法：右键 uninstall-all.ps1 → 使用 PowerShell 运行。
 param([switch]$Force)

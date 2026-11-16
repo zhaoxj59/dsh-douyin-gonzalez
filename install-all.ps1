@@ -1,4 +1,4 @@
-# DSH 抖音插件 v0.4.0 + Aurabot 抖音私信桥接 — 一键整合安装（Windows PowerShell）
+﻿# DSH 抖音插件 v0.4.0 + Aurabot 抖音私信桥接 — 一键整合安装（Windows PowerShell）
 # 一次装两边：① DSH 插件 dsh-douyin-gonzalez v0.4.0  ② Aurabot 模块 douyin-bridge v0.1.0
 # 跑之前：先把 DSH 完全退出。脚本会先备份，失败自动回滚，不动 DSH 的插件数据目录。
 # 用法：解压后右键 install-all.ps1 → 使用 PowerShell 运行；跳过确认用：.\install-all.ps1 -Force
