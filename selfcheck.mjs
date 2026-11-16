@@ -41,12 +41,12 @@ const entry = await import('./dsh-plugin.mjs');
 check('entry exports name', entry.name === 'douyin-gonzalez', entry.name);
 check('entry inject includes tools', Array.isArray(entry.inject) && entry.inject.includes('tools'));
 check('entry exports apply()', typeof entry.apply === 'function');
-const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
+const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_aurabot_status', 'dy_aurabot_reply', 'dy_aurabot_proactive', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
   'dy_like', 'dy_comment', 'dy_comment_mention', 'dy_share', 'dy_favorite', 'dy_sticker', 'dy_collect_sticker', 'dy_spark', 'dy_reply_own_comments',
   'dy_hot', 'dy_search', 'dy_following', 'dy_creator_videos', 'dy_diagnose_creator', 'dy_my_posts', 'dy_watch_sources',
   'dy_post', 'dy_publish_draft', 'dy_comfyui_latest',
   'dy_patrol', 'dy_login_status', 'dy_cleanup', 'dy_memory', 'dy_risk_status', 'dy_analyze_video', 'dy_fish_share'];
-check('33 tools defined', entry.TOOL_DEFINITIONS?.length === 33, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
+check('36 tools defined', entry.TOOL_DEFINITIONS?.length === 36, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
 for (const want of ALL_TOOLS) check(`tool ${want} exists`, entry.TOOL_DEFINITIONS.some((t) => t.name === want));
 for (const [tool, pkgName] of [['dy_like', 'interact'], ['dy_hot', 'discover'], ['dy_post', 'publish'], ['dy_patrol', 'safety'], ['dy_watch', 'core']]) {
   check(`tool ${tool} gated by package ${pkgName}`, entry.TOOL_DEFINITIONS.find((t) => t.name === tool)?.pkg === pkgName);
@@ -66,7 +66,7 @@ check('dy_post requires file', (() => {
   process.env.DSH_DOUYIN_AUTO_SETTINGS = '0'; // 自检不自动起 8765，否则进程挂住退不出
   await entry.apply(fakeCtx, { dataDir: path.join(os.tmpdir(), 'dy-gonzalez-selfcheck') });
   check('tool dy_health_check gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_health_check')?.pkg === 'core');
-check('apply() registers 33 tools on fake ctx.tools', registered.length === 33, registered.join(', '));
+check('apply() registers 36 tools on fake ctx.tools', registered.length === 36, registered.join(', '));
 check('dy_fish_share is gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_fish_share')?.pkg === 'core');
 }
 
@@ -84,6 +84,9 @@ check('settings page has 5 package tabs', ['pane-core', 'pane-interact', 'pane-d
 check('settings page has top status cards', html.includes('cardLogin') && html.includes('cardCounts') && html.includes('cardSpark') && html.includes('cardRisk'));
 check('settings page has comment/like section', html.includes('自行评论') && html.includes('自行点赞'));
 check('settings page has stranger section', html.includes('陌生人私信'));
+check('settings page has Aurabot bridge controls', html.includes('Aurabot 智能私信桥接') && html.includes('cfg-aurabotBridge-autoReply') && html.includes('cfg-aurabotBridge-autoProactive'));
+check('Aurabot module example uses api.think and authenticated routes', fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'index.mjs'), 'utf8').includes('api.think') && fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'index.mjs'), 'utf8').includes('api.route'));
+check('Aurabot bridge client rejects missing credentials', (await (await import('./lib/aurabot-bridge.mjs')).aurabotBridgeStatus({ aurabotBridge: {} })).error === 'aurabot-not-configured');
 check('settings page has share-by-interest section', html.includes('按兴趣挑人') || html.includes('兴趣'));
 check('settings page has auto-post section', html.includes('自行发抖音'));
 check('settings page has auto-choose section', html.includes('自己选片'));
