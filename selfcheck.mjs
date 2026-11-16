@@ -779,5 +779,15 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   } finally { globalThis.fetch = originalFetch; }
 }
 
+// The IM inspector is registered and exported; it is read-only and
+// does not expose message text or raw conversation identifiers in its output.
+{
+  const plugin = fs.readFileSync(path.join(ROOT, 'dsh-plugin.mjs'), 'utf8');
+  const browser = fs.readFileSync(path.join(ROOT, 'lib/browser.mjs'), 'utf8');
+  check('dy_dm_inspect tool is registered', plugin.includes("name: 'dy_dm_inspect'") && plugin.includes("case 'dy_dm_inspect'"));
+  check('browser exports the read-only IM DOM inspector', browser.includes('export async function inspectDmStructure'));
+  check('IM inspector redacts raw message content and IDs', browser.includes('hasDataId: Boolean') && browser.includes("privacy: '未导出昵称、消息正文、Cookie 或原始会话 ID。'"));
+}
+
 console.log(failures === 0 ? '\nAll self-checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
