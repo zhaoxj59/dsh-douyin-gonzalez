@@ -8,7 +8,7 @@
 // v0.3.2: friendly playwright-missing error, dy_fish_share, login on the
 // first page, auto-save, DSH native panel section.
 import { dataPaths } from './lib/paths.mjs';
-import { loadAllowed, canDoAction, alreadyActedOnVideo, logAction, rotationGate } from './lib/store.mjs';
+import { loadAllowed, canReply, canDoAction, alreadyActedOnVideo, logAction, rotationGate } from './lib/store.mjs';
 import { loadConfig, packageGate } from './lib/config.mjs';
 import { outwardBudgetGate } from './lib/outward-gate.mjs';
 
@@ -22,6 +22,9 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_list_chats', pkg: 'core', description: '读取抖音私信会话列表，写入本地 chats.json（好友互动页的勾选来源）。', parameters: { type: 'object', properties: {} }, execute: 'listChats' },
   { name: 'dy_dm_reply', pkg: 'core', description: '给一个已许可会话回一条私信。只回 allowed.json 里勾选过的会话；每人每天上限、全天上限按 config.json；发送结果不明时不自动重发。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReply' },
   { name: 'dy_dm_reply_stranger', pkg: 'core', description: '给一个陌生人回一条私信。只有在设置页显式打开“陌生人私信回复”开关时才可用，有独立的每日上限（默认 3 条），和白名单回复分开计数。默认关闭。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReplyStranger' },
+  { name: 'dy_dm_ai_reply', pkg: 'core', write: true, description: '把收到的抖音私信交给 Aurabot，使用大肥鱼人格生成回复并由 DSH 自动发送。白名单自动回复；陌生人仅在陌生人回复开关开启时允许。需要配置 DSH_AURABOT_BASE_URL 和 DSH_AURABOT_TOKEN。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, senderId: { type: 'string' }, senderName: { type: 'string' }, message: { type: 'string' }, eventId: { type: 'string' }, recentMessages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } } }, required: ['conversationId', 'senderId', 'message'] }, execute: 'dmAiReply' },
+  { name: 'dy_dm_ai_proactive', pkg: 'core', write: true, description: '让 Aurabot 为一个已许可联系人生成主动私信并由 DSH 发送。仅允许 allowed.json 中的联系人；受私信每日额度和风控暂停控制，不群发。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, senderId: { type: 'string' }, senderName: { type: 'string' }, goal: { type: 'string' }, recentMessages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } } }, required: ['conversationId', 'senderId', 'goal'] }, execute: 'dmAiProactive' },
+  { name: 'dy_aurabot_status', pkg: 'core', description: '检查 DSH 与 Aurabot API 的本地配置状态，不会发送消息。', parameters: { type: 'object', properties: {} }, execute: 'aurabotStatus' },
   { name: 'dy_daily_report', pkg: 'core', description: '从本地观看/回复/点赞/评论/分享/发视频记录生成当天的 Markdown 日报，不额外调模型。', parameters: { type: 'object', properties: { date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' } } }, execute: 'dailyReport' },
   { name: 'dy_astrbot_status', pkg: 'core', description: '查看 AstrBot 桥的状态（是否开启、端口、今日计数）。桥默认关闭，开启也只监听 127.0.0.1 + token。', parameters: { type: 'object', properties: {} }, execute: 'astrbotStatus' },
   { name: 'dy_health_check', pkg: 'core', description: '一键体检：真跑 13 项检查（Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控、大肥鱼记忆互通），返回通过几项、不通过哪几项，每项不通过都写原因。只读本地状态，不改任何文件；Edge 探不到时那项报 unknown，不假装通过。', parameters: { type: 'object', properties: {} }, execute: 'healthCheck' },
@@ -93,6 +96,56 @@ async function runTool(toolName, args, dataDir) {
     case 'dy_list_chats': {
       const { listChats } = await import('./lib/browser.mjs');
       return listChats(dir);
+    }
+    case 'dy_aurabot_status': {
+      const { aurabotBridgeStatus } = await import('./lib/aurabot-client.mjs');
+      return { ok: true, ...aurabotBridgeStatus() };
+    }
+    case 'dy_dm_ai_reply': {
+      if (!args?.conversationId || !args?.senderId || !String(args?.message ?? '').trim()) {
+        return { ok: false, error: 'missing-args', message: 'Aurabot 私信回复需要 conversationId、senderId 和 message。' };
+      }
+      const allowedGate = canReply(dir, args.conversationId);
+      const stranger = !allowedGate.ok;
+      if (stranger && !config.strangerReply.enabled) return { ok: false, ...allowedGate };
+      const { requestAurabot } = await import('./lib/aurabot-client.mjs');
+      const generated = await requestAurabot('message', {
+        event_id: args.eventId,
+        conversation_id: args.conversationId,
+        sender_id: args.senderId,
+        sender_name: args.senderName ?? '',
+        message: args.message,
+        recent_messages: args.recentMessages ?? [],
+      });
+      if (!generated.ok) return generated;
+      if (!generated.should_send || !String(generated.reply_text ?? '').trim()) {
+        return { ok: true, sent: false, reason: generated.reason ?? 'aurabot-no-reply', message: 'Aurabot 判断本轮不需要发送回复。' };
+      }
+      const { replyTo, replyToStranger } = await import('./lib/dm.mjs');
+      return stranger
+        ? replyToStranger(dir, { conversationId: args.conversationId, text: generated.reply_text })
+        : replyTo(dir, { conversationId: args.conversationId, text: generated.reply_text });
+    }
+    case 'dy_dm_ai_proactive': {
+      if (!args?.conversationId || !args?.senderId || !String(args?.goal ?? '').trim()) {
+        return { ok: false, error: 'missing-args', message: '主动私信需要 conversationId、senderId 和 goal。' };
+      }
+      const allowedGate = canReply(dir, args.conversationId);
+      if (!allowedGate.ok) return { ok: false, reason: 'proactive-requires-allowlist', message: '主动私信仅允许已许可联系人。' };
+      const { requestAurabot } = await import('./lib/aurabot-client.mjs');
+      const generated = await requestAurabot('proactive', {
+        conversation_id: args.conversationId,
+        sender_id: args.senderId,
+        sender_name: args.senderName ?? '',
+        goal: args.goal,
+        recent_messages: args.recentMessages ?? [],
+      });
+      if (!generated.ok) return generated;
+      if (!generated.should_send || !String(generated.reply_text ?? '').trim()) {
+        return { ok: true, sent: false, reason: generated.reason ?? 'aurabot-no-draft' };
+      }
+      const { replyTo } = await import('./lib/dm.mjs');
+      return replyTo(dir, { conversationId: args.conversationId, text: generated.reply_text });
     }
     case 'dy_dm_reply': {
       if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply 需要 conversationId 和非空的 text。' };
