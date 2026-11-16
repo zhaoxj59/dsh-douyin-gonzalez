@@ -213,8 +213,11 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/aurabot/test') {
     if (!requireToken(req, res)) return;
     const config = loadConfig();
-    const result = await aurabotBridgeStatus(config, config.aurabotBridge?.timeoutMs);
-    json(req, res, result.ok ? 200 : 502, { ...result, testedAt: new Date().toISOString() });
+    aurabotBridgeStatus(config, config.aurabotBridge?.timeoutMs).then((result) => {
+      json(req, res, result.ok ? 200 : 502, { ...result, testedAt: new Date().toISOString() });
+    }).catch((error) => {
+      json(req, res, 502, { ok: false, error: 'aurabot-health-failed', message: error.message, testedAt: new Date().toISOString() });
+    });
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/health') {
