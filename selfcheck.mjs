@@ -733,5 +733,51 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
+// Aurabot bridge contract: verify the DSH tool's message field is translated
+// to the module's text field, the module response uses replyText, and DSH
+// still refuses to send to a conversation that is not explicitly allowed.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-aurabot-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { readJsonl } = await import('./lib/store.mjs');
+  const { dataPaths } = await import('./lib/paths.mjs');
+  const { runTool } = await import('./dsh-plugin.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret', timeoutMs: 10000 } });
+  const originalFetch = globalThis.fetch;
+  let requestSeen = null;
+  try {
+    globalThis.fetch = async (url, options) => {
+      requestSeen = { url: String(url), options, body: JSON.parse(options.body) };
+      return { ok: true, status: 200, json: async () => ({ ok: true, eventId: 'aurabot-event-1', replyText: '测试回复' }) };
+    };
+    const result = await runTool('dy_aurabot_reply', {
+      eventId: 'aurabot-event-1', conversationId: 'not-allowed', senderId: 'sender-1', message: '你好',
+    }, tmp);
+    check('Aurabot tool sends message as module text field', requestSeen?.body?.text === '你好');
+    check('Aurabot client calls the documented module route', requestSeen?.url === 'http://127.0.0.1:19090/aurabot/api/ext/douyin-bridge/message');
+    check('DSH refuses auto-reply to a non-allowlisted conversation', result.ok === false && result.reason === 'not-allowed');
+    const inbound = readJsonl(path.join(dataPaths(tmp).dir, 'aurabot-inbound.jsonl'));
+    check('Aurabot inbound event is persisted for idempotency', inbound.some((x) => x.eventId === 'aurabot-event-1' && x.status === 'send-failed'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// Bridge health uses the configured timeout and documented health route.
+{
+  const { aurabotBridgeStatus } = await import('./lib/aurabot-bridge.mjs');
+  const originalFetch = globalThis.fetch;
+  let urlSeen = '';
+  try {
+    globalThis.fetch = async (url) => {
+      urlSeen = String(url);
+      return { ok: true, status: 200, json: async () => ({ ok: true, module: 'douyin-bridge' }) };
+    };
+    const result = await aurabotBridgeStatus({ aurabotBridge: { baseUrl: 'http://127.0.0.1:19090', token: 'test-secret', timeoutMs: 15000 } });
+    check('Aurabot health endpoint is reachable through the documented route', result.ok === true && urlSeen.endsWith('/aurabot/api/ext/douyin-bridge/health'));
+  } finally { globalThis.fetch = originalFetch; }
+}
+
 console.log(failures === 0 ? '\nAll self-checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
