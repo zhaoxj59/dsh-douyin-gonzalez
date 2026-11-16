@@ -106,9 +106,10 @@ async function runTool(toolName, args, dataDir) {
     }
     case 'dy_aurabot_reply': {
       if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoReply) return { ok: false, error: 'aurabot-auto-reply-disabled', message: '请先在 DSH 设置中启用 Aurabot 桥接和自动回复。' };
-      if (!args?.eventId || !args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_aurabot_reply 需要 eventId、conversationId 和 text。' };
+      const message = String(args?.message ?? args?.text ?? '').trim();
+      if (!args?.eventId || !args?.conversationId || !message) return { ok: false, error: 'missing-args', message: 'dy_aurabot_reply 需要 eventId、conversationId 和 message。' };
       const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
-      return replyWithAurabot(dir, config, args);
+      return replyWithAurabot(dir, config, { ...args, text: message });
     }
     case 'dy_dm_reply_stranger': {
       if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply_stranger 需要 conversationId 和非空的 text。' };
@@ -118,38 +119,18 @@ async function runTool(toolName, args, dataDir) {
     case 'dy_aurabot_status': {
       return { ok: true, configured: Boolean(config.aurabotBridge?.baseUrl && config.aurabotBridge?.token), enabled: Boolean(config.aurabotBridge?.enabled), autoReply: Boolean(config.aurabotBridge?.autoReply), autoProactive: Boolean(config.aurabotBridge?.autoProactive), ...(await aurabotBridgeStatus(config)) };
     }
-    case 'dy_aurabot_reply': {
-      if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoReply) return { ok: false, error: 'aurabot-auto-reply-disabled', message: '请先在设置页启用 Aurabot 桥接和自动回复。' };
-      if (!args?.conversationId || !args?.senderId || !String(args?.message ?? '').trim()) return { ok: false, error: 'missing-args', message: '需要 conversationId、senderId 和 message。' };
-      const eventId = String(args.eventId || randomUUID());
-      const ai = await generateAurabotReply(config, {
-        event_id: eventId,
-        conversation_id: String(args.conversationId),
-        sender_id: String(args.senderId),
-        sender_name: String(args.senderName ?? ''),
-        message: String(args.message).slice(0, 4000),
-        recent_messages: Array.isArray(args.recentMessages) ? args.recentMessages.slice(-12).map((x) => String(x).slice(0, 1000)) : [],
-      });
-      if (!ai.ok || !String(ai.reply_text ?? '').trim()) return { ok: false, error: ai.error ?? 'aurabot-no-reply', message: ai.message ?? 'Aurabot 未生成回复。' };
-      const { replyTo, replyToStranger } = await import('./lib/dm.mjs');
-      let sent = await replyTo(dir, { conversationId: args.conversationId, text: ai.reply_text, eventId });
-      if (!sent.ok && sent.reason === 'not-allowed' && config.strangerReply?.enabled) {
-        sent = await replyToStranger(dir, { conversationId: args.conversationId, text: ai.reply_text, eventId });
-      }
-      return { ...sent, source: 'aurabot', replyText: ai.reply_text };
-    }
     case 'dy_aurabot_proactive': {
       if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoProactive) return { ok: false, error: 'aurabot-proactive-disabled', message: '请先在设置页启用 Aurabot 主动联系。' };
       if (!args?.conversationId || !args?.recipientName || !args?.goal) return { ok: false, error: 'missing-args', message: '需要 conversationId、recipientName 和 goal。' };
       const eventId = String(args.eventId || randomUUID());
       const ai = await generateAurabotProactive(config, { conversation_id: String(args.conversationId), recipient_name: String(args.recipientName), goal: String(args.goal), context: String(args.context ?? '').slice(0, 2000) });
-      if (!ai.ok || !String(ai.message_text ?? '').trim()) return { ok: false, error: ai.error ?? 'aurabot-no-message', message: ai.message ?? 'Aurabot 未生成主动私信。' };
+      if (!ai.ok || !String(ai.replyText ?? '').trim()) return { ok: false, error: ai.error ?? 'aurabot-no-message', message: ai.message ?? 'Aurabot 未生成主动私信。' };
       const { replyTo, replyToStranger } = await import('./lib/dm.mjs');
-      let sent = await replyTo(dir, { conversationId: args.conversationId, text: ai.message_text, eventId });
+      let sent = await replyTo(dir, { conversationId: args.conversationId, text: ai.replyText, eventId });
       if (!sent.ok && sent.reason === 'not-allowed' && config.strangerReply?.enabled) {
         sent = await replyToStranger(dir, { conversationId: args.conversationId, text: ai.message_text, eventId });
       }
-      return { ...sent, source: 'aurabot-proactive', messageText: ai.message_text };
+      return { ...sent, source: 'aurabot-proactive', messageText: ai.replyText };
     }
     case 'dy_like':
     case 'dy_comment':
