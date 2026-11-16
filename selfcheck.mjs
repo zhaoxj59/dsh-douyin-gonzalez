@@ -23,7 +23,7 @@ function check(name, ok, detail = '') {
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 check('package.json name', pkg.name === 'dsh-douyin-gonzalez', pkg.name);
-check('package.json version 0.3.4', pkg.version === '0.3.4', pkg.version);
+check('package.json version 0.4.0', pkg.version === '0.4.0', pkg.version);
 check('package.json type module', pkg.type === 'module');
 check('dsh.bundle.patch points at cordis.bundle.yml', pkg.dsh?.bundle?.patch === './cordis.bundle.yml');
 check('dsh.client platform web', pkg.dsh?.client?.platform === 'web');
@@ -115,6 +115,25 @@ check('settings server has /api/risk/clear', serverSrc.includes('/api/risk/clear
 check('settings server has /api/cleanup', serverSrc.includes('/api/cleanup'));
 check('settings server has /api/memory', serverSrc.includes('/api/memory'));
 check('settings server has /api/health', serverSrc.includes('/api/health'));
+
+// v0.4.0 combined outward-action budget is enforced from successful logs.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-outward-'));
+  const { logAction } = await import('./lib/store.mjs');
+  const { outwardBudgetGate, outwardActionCount } = await import('./lib/outward-gate.mjs');
+  const cfg = { caps: { totalOutwardPerDay: 3 } };
+  check('outward budget starts with remaining allowance', outwardBudgetGate(tmp, cfg).remaining === 3);
+  logAction(tmp, { type: 'like', status: 'sent', videoId: 'v1' });
+  logAction(tmp, { type: 'comment', status: 'sent', videoId: 'v2' });
+  logAction(tmp, { type: 'share', status: 'planned', videoId: 'v3' });
+  const mid = outwardBudgetGate(tmp, cfg);
+  check('outward budget counts only successful sends', mid.ok === true && mid.used === 2 && mid.remaining === 1);
+  logAction(tmp, { type: 'mention', status: 'sent', videoId: 'v4' });
+  const full = outwardBudgetGate(tmp, cfg);
+  check('outward budget blocks at combined cap across action types', full.ok === false && full.reason === 'total-outward-cap' && full.used === 3);
+  check('outward action counter includes mention but excludes planned', outwardActionCount({ byType: { like: 1, mention: 1, share: 0 } }) === 2);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
 
 // Config v4 defaults + round-trip + v2/v3 migration.
 {
