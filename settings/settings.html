@@ -153,7 +153,8 @@
     <div class="field"><label>桥接密钥</label> <input class="wide" type="password" id="cfg-aurabotBridge-token" placeholder="与 Aurabot douyin-bridge 模块设置中的密钥一致"></div>
     <div class="field"><label><input type="checkbox" id="cfg-aurabotBridge-autoReply"> 自动回复（Aurabot 生成，DSH 自动发送）</label></div>
     <div class="field"><label><input type="checkbox" id="cfg-aurabotBridge-autoProactive"> 允许主动私信（无逐条人工确认）</label></div>
-    <p class="muted">远程地址必须使用 HTTPS；本机可使用 HTTP。未配置密钥或连接失败时不会发送。主动联系仍受联系人权限、每日额度和停止联系要求约束。</p>
+    <div class="field"><button id="aurabotBridgeTestBtn" type="button">测试 Aurabot 连接</button><span id="aurabotBridgeTestResult" class="muted">尚未测试</span></div>
+    <p class="muted">远程地址必须使用 HTTPS；本机可使用 HTTP。未配置密钥或连接失败时不会发送。连接测试只检查 Aurabot 模块健康状态，不会发送私信。主动联系仍受联系人权限、每日额度和停止联系要求约束。</p>
   </div>
 </div>
 
@@ -640,6 +641,17 @@ async function save() {
 
 document.getElementById('refreshBtn').addEventListener('click', load);
 document.getElementById('saveBtn').addEventListener('click', save);
+document.getElementById('aurabotBridgeTestBtn')?.addEventListener('click', async () => {
+  const out = document.getElementById('aurabotBridgeTestResult');
+  out.textContent = '正在测试连接…';
+  try {
+    const result = await postJson('/api/aurabot/test', {});
+    out.textContent = result.ok
+      ? '连接成功：Aurabot 模块已响应（' + (result.version || '版本未知') + '）'
+      : '连接失败：' + (result.message || result.error || '未知错误');
+  } catch (error) { out.textContent = '连接失败：' + error.message; }
+});
+
 document.getElementById('addBtn').addEventListener('click', () => {
   const id = document.getElementById('manualId').value.trim();
   const name = document.getElementById('manualName').value.trim() || id.replace(/^name:/, '');
