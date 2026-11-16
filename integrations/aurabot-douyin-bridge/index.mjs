@@ -119,7 +119,7 @@ export default {
         const eventId = cleanText(input.event_id, 180);
         if (task === 'message' && !eventId) return json(api, res, 400, { ok: false, error: 'event_id-required' });
         const events = read(eventsFile, {});
-        if (eventId && events[eventId]) return json(api, res, 200, { ok: true, duplicate: true, ...events[eventId] });
+        if (eventId && events[eventId]) return json(api, res, 200, { ok: true, duplicate: true, should_send: false, reason: 'duplicate-event' });
         const result = await think({ ...input, task });
         if (eventId) {
           events[eventId] = result;
