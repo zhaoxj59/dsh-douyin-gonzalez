@@ -27,6 +27,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dataPaths } from '../lib/paths.mjs';
 import { loadAllowed, saveAllowed, readJson, actionCounts, replyCounts } from '../lib/store.mjs';
 import { loadConfig, saveConfig } from '../lib/config.mjs';
+import { aurabotBridgeStatus } from '../lib/aurabot-bridge.mjs';
 import { riskState, clearRisk, cleanupOld, readMemory } from '../lib/safety.mjs';
 
 const PORT = Number(process.env.DSH_DOUYIN_SETTINGS_PORT ?? 8765);
@@ -207,6 +208,13 @@ const server = http.createServer((req, res) => {
         json(req, res, 400, { ok: false, error: 'aurabot-send-failed', message: error.message });
       }
     });
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/aurabot/test') {
+    if (!requireToken(req, res)) return;
+    const config = loadConfig();
+    const result = await aurabotBridgeStatus(config, config.aurabotBridge?.timeoutMs);
+    json(req, res, result.ok ? 200 : 502, { ...result, testedAt: new Date().toISOString() });
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/health') {
