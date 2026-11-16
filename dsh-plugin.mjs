@@ -331,6 +331,21 @@ export async function apply(ctx, config = {}) {
   const paths = dataPaths(dataDir);
   console.log(`[dsh-douyin-gonzalez] loaded v0.4.0. data dir: ${paths.dir}`);
 
+  // Start the local settings API before registering optional DSH tools.
+  // Some DSH hosts initialize the tools registry after plugin apply begins;
+  // starting it later (or after the registry check) can leave the settings UI offline.
+  if (process.env.DSH_DOUYIN_AUTO_SETTINGS !== '0') {
+    try {
+      const { startSettingsServer } = await import('./settings/settings-server.mjs');
+      const started = await startSettingsServer();
+      console.log(started
+        ? '[dsh-douyin-gonzalez] settings server auto-started on 127.0.0.1:8765'
+        : '[dsh-douyin-gonzalez] settings server did not bind port 8765; check whether another process owns it');
+    } catch (e) {
+      console.error(`[dsh-douyin-gonzalez] settings server auto-start failed: ${e.stack ?? e.message}`);
+    }
+  }
+
   let defineTool = null;
   try { ({ defineTool } = await import('@deepseek-ai/dsh-tools')); } catch { defineTool = null; }
 
@@ -365,16 +380,4 @@ export async function apply(ctx, config = {}) {
     console.log(`[dsh-douyin-gonzalez] astrbot bridge failed to start (plugin still works): ${e.message}`);
   }
 
-  // v0.3.4：插件加载时自动起设置服务（127.0.0.1:8765），面板不用
-  // 再手动跑 npm run settings。端口已被占就是服务已在跑，不报错。
-  // DSH_DOUYIN_AUTO_SETTINGS=0 可关掉自动起（自检用）。
-  if (process.env.DSH_DOUYIN_AUTO_SETTINGS !== '0') {
-    try {
-      const { startSettingsServer } = await import('./settings/settings-server.mjs');
-      const started = await startSettingsServer();
-      if (started) console.log('[dsh-douyin-gonzalez] settings server auto-started on 127.0.0.1:8765');
-    } catch (e) {
-      console.log(`[dsh-douyin-gonzalez] settings server auto-start failed (plugin still works; run npm run settings manually): ${e.message}`);
-    }
-  }
 }
