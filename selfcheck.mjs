@@ -53,7 +53,7 @@ for (const [tool, pkgName] of [['dy_like', 'interact'], ['dy_hot', 'discover'], 
 }
 check('Aurabot AI reply tool requires conversation and message', (() => {
   const t = entry.TOOL_DEFINITIONS.find((x) => x.name === 'dy_dm_ai_reply');
-  return ['conversationId', 'senderId', 'message'].every((k) => t?.parameters?.required?.includes(k));
+  return ['conversationId', 'senderId', 'message', 'eventId'].every((k) => t?.parameters?.required?.includes(k));
 })());
 check('Aurabot proactive tool is write-gated', entry.TOOL_DEFINITIONS.find((x) => x.name === 'dy_dm_ai_proactive')?.write === true);
 check('Aurabot bridge module is included in package files', pkg.files?.includes('integrations/'));
