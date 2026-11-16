@@ -277,7 +277,7 @@ DSH 仍是独立抖音插件；Aurabot 只作为 AI 回复服务，不迁移 DSH
 
 - DSH API 客户端：`lib/aurabot-bridge.mjs`
 - Aurabot 用户模块样例：`integrations/aurabot-module/douyin-bridge/index.mjs`
-- DSH 工具：`dy_aurabot_status`、`dy_aurabot_reply`、`dy_aurabot_proactive`
+- DSH 工具：`dy_aurabot_status`、`dy_aurabot_reply`、`dy_aurabot_proactive`；新增只读诊断工具 `dy_dm_inspect`，可导出脱敏后的私信页面 DOM 结构（不含昵称、消息正文、Cookie 或原始会话 ID）。
 - DSH 设置页：桥接开关、Aurabot 服务 Origin、共享密钥、自动回复和主动联系开关。
 - Aurabot 通过 `api.think()` 使用现有人格与记忆生成回复；只有 DSH 执行抖音消息发送。
 
