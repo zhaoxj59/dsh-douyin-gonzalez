@@ -106,7 +106,8 @@ async function runTool(toolName, args, dataDir) {
         return { ok: false, error: 'missing-args', message: 'Aurabot 私信回复需要 conversationId、senderId 和 message。' };
       }
       const allowedGate = canReply(dir, args.conversationId);
-      const stranger = !allowedGate.ok;
+      const stranger = allowedGate.reason === 'not-allowed';
+      if (!allowedGate.ok && !stranger) return { ok: false, ...allowedGate };
       if (stranger && !config.strangerReply.enabled) return { ok: false, ...allowedGate };
       const { requestAurabot } = await import('./lib/aurabot-client.mjs');
       const generated = await requestAurabot('message', {
