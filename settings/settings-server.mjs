@@ -25,7 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dataPaths } from '../lib/paths.mjs';
-import { loadAllowed, saveAllowed, readJson, actionCounts, replyCounts } from '../lib/store.mjs';
+import { loadAllowed, saveAllowed, readJson, actionCounts, replyCounts, isBlocked } from '../lib/store.mjs';
 import { loadConfig, saveConfig } from '../lib/config.mjs';
 import { aurabotBridgeStatus } from '../lib/aurabot-bridge.mjs';
 import { riskState, clearRisk, cleanupOld, readMemory } from '../lib/safety.mjs';
@@ -191,7 +191,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/aurabot/contacts') {
     if (!requireToken(req, res)) return;
     const loaded = loadAllowed();
-    json(req, res, 200, { ok: true, allowed: loaded.allowed ?? [] });
+    json(req, res, 200, { ok: true, allowed: (loaded.allowed ?? []).filter((contact) => !isBlocked(undefined, contact.id)) });
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/aurabot/send') {
