@@ -289,7 +289,7 @@ DSH 仍是独立抖音插件；Aurabot 只作为 AI 回复服务，不迁移 DSH
 %USERPROFILE%\\.dsh\\plugins-data\\aurabot\\modules\\douyin-bridge\\
 ```
 
-在 Aurabot「模块」页面启用模块，并设置桥接密钥。DSH 设置页中的密钥必须完全一致。
+在 Aurabot「模块」页面启用模块，并设置桥接密钥。DSH 设置页中的密钥必须完全一致。 明确表示“别联系我 / 不要再私信 / 停止联系”等拒绝联系的消息会被 DSH 加入本地 `blocked.json`，并优先于白名单拦截后续发送。
 
 ### API 地址
 
