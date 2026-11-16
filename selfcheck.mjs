@@ -1,5 +1,5 @@
 // Self-check v0.4.0 (no DSH, no Douyin login, no network needed).
-// Verifies: manifest + patch + entry exports, the 33 tools in 5 packages,
+// Verifies: manifest + patch + entry exports, the 37 tools in 5 packages,
 // settings page (5 tabs + top status cards + all new sections),
 // config v4 defaults + round-trip + v2/v3 migration, allowed.json v2,
 // stranger gate, caps, rotation, whitelist sharing, post/draft gates,
@@ -41,12 +41,12 @@ const entry = await import('./dsh-plugin.mjs');
 check('entry exports name', entry.name === 'douyin-gonzalez', entry.name);
 check('entry inject includes tools', Array.isArray(entry.inject) && entry.inject.includes('tools'));
 check('entry exports apply()', typeof entry.apply === 'function');
-const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_aurabot_status', 'dy_aurabot_reply', 'dy_aurabot_proactive', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
+const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_inspect', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_aurabot_status', 'dy_aurabot_reply', 'dy_aurabot_proactive', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
   'dy_like', 'dy_comment', 'dy_comment_mention', 'dy_share', 'dy_favorite', 'dy_sticker', 'dy_collect_sticker', 'dy_spark', 'dy_reply_own_comments',
   'dy_hot', 'dy_search', 'dy_following', 'dy_creator_videos', 'dy_diagnose_creator', 'dy_my_posts', 'dy_watch_sources',
   'dy_post', 'dy_publish_draft', 'dy_comfyui_latest',
   'dy_patrol', 'dy_login_status', 'dy_cleanup', 'dy_memory', 'dy_risk_status', 'dy_analyze_video', 'dy_fish_share'];
-check('36 tools defined', entry.TOOL_DEFINITIONS?.length === 36, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
+check('37 tools defined', entry.TOOL_DEFINITIONS?.length === 37, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
 for (const want of ALL_TOOLS) check(`tool ${want} exists`, entry.TOOL_DEFINITIONS.some((t) => t.name === want));
 for (const [tool, pkgName] of [['dy_like', 'interact'], ['dy_hot', 'discover'], ['dy_post', 'publish'], ['dy_patrol', 'safety'], ['dy_watch', 'core']]) {
   check(`tool ${tool} gated by package ${pkgName}`, entry.TOOL_DEFINITIONS.find((t) => t.name === tool)?.pkg === pkgName);
@@ -66,7 +66,7 @@ check('dy_post requires file', (() => {
   process.env.DSH_DOUYIN_AUTO_SETTINGS = '0'; // 自检不自动起 8765，否则进程挂住退不出
   await entry.apply(fakeCtx, { dataDir: path.join(os.tmpdir(), 'dy-gonzalez-selfcheck') });
   check('tool dy_health_check gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_health_check')?.pkg === 'core');
-check('apply() registers 36 tools on fake ctx.tools', registered.length === 36, registered.join(', '));
+check('apply() registers 37 tools on fake ctx.tools', registered.length === 37, registered.join(', '));
 check('dy_fish_share is gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_fish_share')?.pkg === 'core');
 }
 
