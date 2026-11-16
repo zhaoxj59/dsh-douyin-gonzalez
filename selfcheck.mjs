@@ -116,6 +116,14 @@ check('settings server has /api/cleanup', serverSrc.includes('/api/cleanup'));
 check('settings server has /api/memory', serverSrc.includes('/api/memory'));
 check('settings server has /api/health', serverSrc.includes('/api/health'));
 
+// Platform challenge signals must trigger a stop, never an automated bypass.
+{
+  const { classifyPlatformStopText } = await import('./lib/browser.mjs');
+  check('platform stop detects captcha prompt', Boolean(classifyPlatformStopText('请输入验证码完成安全验证')));
+  check('platform stop detects rate-limit warning', Boolean(classifyPlatformStopText('操作过于频繁，请稍后再试')));
+  check('platform stop ignores ordinary feed text', classifyPlatformStopText('今天分享一个有趣的科技视频') === null);
+}
+
 // v0.4.0 commercial filter skips explicit ads / purchase CTAs but keeps reviews.
 {
   const { classifyCommercialCaption } = await import('./lib/content-filter.mjs');
