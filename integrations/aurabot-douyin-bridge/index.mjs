@@ -18,7 +18,7 @@ function safeId(v) {
   return cleanText(v, 160).replace(/[^\p{L}\p{N}_.:@-]/gu, '_');
 }
 function json(api, res, status, value) {
-  return res.end(JSON.stringify(value), status);
+  return api.core.http.send(res, status, JSON.stringify(value), 'application/json; charset=utf-8');
 }
 
 export default {
