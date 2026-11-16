@@ -3,46 +3,57 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>刷抖音 · 设置（自写插件 v0.3.2）</title>
+<title>刷抖音 · 设置（自写插件 v0.4.0）</title>
 <style>
-  :root { --blue:#2563eb; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --card:#fff; --bg:#f3f4f6; --red:#b91c1c; --amber:#b45309; --green:#15803d; }
+  :root { --blue:#2563eb; --blue-dark:#1d4ed8; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --card:#fff; --bg:#f3f4f6; --red:#b91c1c; --amber:#b45309; --green:#15803d; --shadow:0 1px 3px rgba(0,0,0,.08); }
   * { box-sizing: border-box; }
   body { font-family: system-ui, "Microsoft YaHei", sans-serif; max-width: 820px; margin: 0 auto; padding: 16px; line-height: 1.6; color: var(--ink); background: var(--bg); }
-  header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
-  header h1 { font-size: 20px; margin: 0; }
+  header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; box-shadow: var(--shadow); }
+  header h1 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   header p { margin: 6px 0 0; opacity: .9; font-size: 13px; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; line-height: 1; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.22); color: #fff; }
+  .pill-branch { background: #f59e0b; }
   .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); }
   .card b { display: block; font-size: 13px; color: var(--muted); }
   .card span { font-size: 16px; font-weight: 700; }
   .card .ok { color: var(--green); } .card .bad { color: var(--red); } .card .warn { color: var(--amber); }
   .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .tab { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 8px 16px; cursor: pointer; font-size: 15px; }
   .tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .tab:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
   .pane { display: none; } .pane.active { display: block; }
-  .section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; box-shadow: var(--shadow); scroll-margin-top: 76px; }
   .section h2 { font-size: 16px; margin: 0 0 6px; }
   .section h3 { font-size: 14px; margin: 14px 0 4px; }
+  .danger-zone { background: #fff7f7; border-color: #fecaca; }
+  .danger-zone h2::before { content: "\26a0\fe0f  "; }
   .muted { color: var(--muted); font-size: 13px; }
   .danger { color: var(--red); font-size: 13px; }
   .warn { color: var(--amber); font-size: 13px; }
-  .row { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .row input[type=checkbox] { width: 22px; height: 22px; flex: none; cursor: pointer; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; border-radius: 8px; }
+  .row:hover { background: #f9fafb; }
+  .row input[type=checkbox] { width: 22px; height: 22px; flex: none; cursor: pointer; accent-color: var(--blue); }
   .row label { cursor: pointer; flex: 1; min-width: 140px; }
   .field { margin: 8px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .field label { min-width: 150px; }
-  .field input[type=number] { padding: 6px 8px; width: 80px; }
-  .field input[type=text], .field input[type=time] { padding: 6px 8px; }
+  .field input[type=number] { padding: 6px 8px; width: 80px; border: 1px solid var(--line); border-radius: 6px; }
+  .field input[type=text], .field input[type=time] { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
+  .field input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.2); }
   .field input.wide { width: min(420px, 100%); }
   .interests { width: 200px; padding: 6px; font-size: 13px; }
-  #status { margin: 12px 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; white-space: pre-wrap; }
-  button { font-size: 15px; padding: 10px 18px; margin-right: 8px; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  #status { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 8px; background: #fff; white-space: pre-wrap; min-height: 20px; }
+  button { font-size: 15px; padding: 10px 18px; margin-right: 8px; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: #fff; transition: border-color .15s, background .15s; }
+  button:hover { border-color: var(--blue); }
+  button:disabled { opacity: .5; cursor: default; }
   #saveBtn { background: var(--blue); color: #fff; border: none; }
+  #saveBtn:hover { background: var(--blue-dark); }
   .pack-off { opacity: .55; }
   .sticky-nav { position: sticky; top: 10px; z-index: 50; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 8px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-  .sticky-nav .nav-label { font-size: 13px; color: var(--muted); padding: 0 4px; }
-  .sticky-nav button { font-size: 13px; padding: 6px 12px; margin-right: 0; border-radius: 999px; }
+  .sticky-nav .nav-label { font-size: 13px; color: var(--muted); padding: 0 4px; flex: none; }
+  .sticky-nav button { font-size: 13px; padding: 6px 12px; margin-right: 0; border-radius: 999px; flex: none; }
   .sticky-nav button.nav-health { background: #0e7490; color: #fff; border-color: #0e7490; }
+  .sticky-nav button.nav-health:hover { border-color: #0e7490; }
   .pkg-purpose { background: #ecfeff; border-left: 4px solid #06b6d4; border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 0 0 12px; }
   .budget-zone { background: #fefce8; border: 2px solid #eab308; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
   .budget-zone h2 { font-size: 16px; margin: 0 0 4px; }
@@ -58,11 +69,12 @@
   .health-item .fail { color: var(--red); font-weight: 700; }
   .health-item .pass { color: var(--green); font-weight: 700; }
   .health-item .unknown { color: var(--amber); font-weight: 700; }
-  @media (max-width: 640px) { .cards { grid-template-columns: repeat(2, 1fr); } .field label { min-width: 120px; } }
+  .page-foot { text-align: center; color: var(--muted); font-size: 12px; padding: 16px 0 8px; }
+  @media (max-width: 640px) { .cards { grid-template-columns: repeat(2, 1fr); } .field label { min-width: 120px; } .sticky-nav { flex-wrap: nowrap; overflow-x: auto; border-radius: 12px; } }
 </style>
 </head>
 <body>
-<header><h1>🐋 刷抖音 · 设置 <span style="opacity:.8;font-size:13px">v0.3.2 · 5 个包</span></h1>
+<header><h1>🐋 刷抖音 · 设置 <span class="pill">v0.4.0</span> <span class="pill pill-branch">预发布分支 · 5 个包</span></h1>
 <p>自写插件 dsh-douyin-gonzalez。每个包一个总开关，关了就不加载、不跑定时器。所有写动作默认全关。改完自动保存（500ms 防抖），顶部会写“已自动保存 HH:MM:SS”；“保存全部设置”按钮还在，自动保存失败时点它手动存。</p></header>
 
 <nav class="sticky-nav" id="stickyNav">
@@ -157,7 +169,7 @@
     <div class="budget-total" id="budgetTotal">…</div>
     <p class="muted">总闸 = 上面开着的对外动作每日次数合计的上限。超了体检会报不通过；工具各自的单项上限照常执行。</p>
   </div>
-  <div class="section" data-pack="interact"><h2>自行评论 / 自行点赞</h2>
+  <div class="section danger-zone" data-pack="interact"><h2>自行评论 / 自行点赞</h2>
     <p class="danger">⚠️ 危险动作：默认全部关着。只开你亲手点的那一个。</p>
     <div class="field"><label><input type="checkbox" id="cfg-autoComment-enabled"> 自行评论（默认关闭）</label><span class="muted">同一视频只评论一次；每天次数见上方「每日预算」区。</span></div>
     <div class="field"><label><input type="checkbox" id="cfg-autoLike-enabled"> 自行点赞（默认关闭）</label><span class="muted">同一视频只点赞一次；每天次数见上方「每日预算」区。</span></div>
@@ -184,7 +196,7 @@
     <div class="field"><label>一言文案（逗号分隔，随机发）</label> <input type="text" class="wide" id="cfg-spark-messages" value="在呢,今天看了个好玩的,火花别断呀"></div>
     <p class="muted">续火花只能发给白名单里的人，每人设续不续在好友列表里勾选。</p>
   </div>
-  <div class="section" data-pack="interact"><h2>回自己视频评论</h2>
+  <div class="section" data-pack="interact"><h2>回自己视频评论</h2><p class="muted">v0.4.0 暂时停用：旧实现会回错视频、回错内容（读的是首页路人评论），正在重写。开关可先关掉。</p>
     <div class="field"><label><input type="checkbox" id="cfg-replyOwn-enabled"> 自动回自己视频下的评论（默认关闭）</label><span class="muted">每天次数见上方「每日预算」区。</span></div>
     <div class="field"><label>只看最近</label> <input type="number" id="cfg-replyOwn-days" min="1" max="30" value="3"> 天内的作品；
       <label><input type="checkbox" id="cfg-replyOwn-random" checked> 随机挑</label>
@@ -217,7 +229,7 @@
   <div class="section"><h2>发片包总开关</h2>
     <div class="field"><label><input type="checkbox" id="cfg-packages-publish-enabled"> 开启发片包（默认关闭）</label></div>
   </div>
-  <div class="section" data-pack="publish"><h2>自行发抖音</h2>
+  <div class="section danger-zone" data-pack="publish"><h2>自行发抖音</h2>
     <p class="danger">默认关闭（每天 0 次）。发视频必须在 DSH 里给一个本地视频文件路径，没有文件不发；每次发布都记进 post-log.jsonl。</p>
     <div class="field"><label><input type="checkbox" id="cfg-autoPost-enabled"> 允许自行发抖音（默认关闭）</label> 每天最多 <input type="number" id="cfg-autoPost-perDay" min="0" max="10" value="0"> 条</div>
     <div class="field"><label><input type="checkbox" id="cfg-publish-draftDefault" checked> 默认存草稿（正式发布去创作者中心点）</label></div>
@@ -274,10 +286,22 @@
   </div>
 </div>
 
+<footer class="page-foot">刷抖音（自写）v0.4.0 · 预发布分支 release/v0.4.0-douyin-enhanced · 完整说明见仓库 README</footer>
 <script>
 let chats = [];
 let allowed = new Map();
 let config = null;
+
+// v0.4.0: 写接口要带设置服务 token（X-Douyin-Token）。token 在
+// 同源 GET /api/token 里取，跨源页面读不到，所以拿不到 token 的
+// 页面也改不了配置。
+let settingsToken = '';
+async function loadToken() {
+  try { const r = await fetch('/api/token').then((x) => x.json()); settingsToken = r.token || ''; } catch { settingsToken = ''; }
+}
+function postJson(path, body) {
+  return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Douyin-Token': settingsToken }, body: JSON.stringify(body) }).then((r) => r.json());
+}
 
 function setStatus(text) { document.getElementById('status').textContent = text; }
 function num(id, fallback) { const el = document.getElementById(id); if (!el) return fallback; const n = Number(el.value); return Number.isFinite(n) ? n : fallback; }
@@ -340,7 +364,7 @@ function updateBudgetTotal() {
   el.innerHTML = `开着的对外动作每日合计：<b>${sum}</b> 次 / 总闸 <b>${total}</b> 次${sum > total ? ' <span class="over">⚠️ 已超总闸，体检会报不通过</span>' : ' ✅ 没超'}`;
 }
 document.addEventListener('change', (e) => { if (e.target?.type === 'checkbox' || e.target?.type === 'number') applyDep(); scheduleAutoSave(); });
-// v0.3.2 自动保存：开关 / 数字一改就自动存（500ms 防抖），不用再点
+// v0.4.0 自动保存：开关 / 数字一改就自动存（500ms 防抖），不用再点
 // “保存全部设置”。存成功顶部写“已自动保存 HH:MM:SS”，失败写红字
 // 原因，“保存全部设置”按钮留着当手动兜底。加载完成前不自动存。
 let loaded = false;
@@ -355,8 +379,8 @@ async function autoSaveNow() {
   const cfg = readConfigFromPage();
   try {
     const [allowedRes, configRes] = await Promise.all([
-      fetch('/api/allowed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed: items }) }).then((r) => r.json()),
-      fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) }).then((r) => r.json()),
+      postJson('/api/allowed', { allowed: items }),
+      postJson('/api/config', { config: cfg }),
     ]);
     const now = new Date();
     const stamp = [now.getHours(), now.getMinutes(), now.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
@@ -381,14 +405,29 @@ async function runHealth() {
   summary.classList.remove('has-fail');
   list.innerHTML = '';
   try {
-    const r = await fetch('/api/health', { method: 'POST' }).then((x) => x.json());
+    const r = await postJson('/api/health', {});
     if (!r.checks) { summary.textContent = `体检没跑起来：${r.message || '接口没通'}`; return; }
     summary.textContent = r.summary;
     summary.classList.toggle('has-fail', r.failed > 0);
-    list.innerHTML = r.checks.map((c) => {
+    // v0.4.0 (L1): 体检结果不再用 innerHTML 拼 —— 抖音昵称可能含
+    // HTML，含 <img onerror=…> 的名字会在打开设置页时执行。改用
+    // textContent 拼节点（好友列表渲染本来就是这么写的）。
+    list.innerHTML = '';
+    for (const c of r.checks) {
       const icon = c.status === 'pass' ? '✅' : c.status === 'fail' ? '❌' : '❓';
-      return `<div class="health-item"><span class="${c.status}">${icon} ${c.name}</span><br><span class="muted">${c.detail}</span></div>`;
-    }).join('');
+      const item = document.createElement('div');
+      item.className = 'health-item';
+      const title = document.createElement('span');
+      title.className = c.status;
+      title.textContent = `${icon} ${c.name}`;
+      const detail = document.createElement('span');
+      detail.className = 'muted';
+      detail.textContent = c.detail ?? '';
+      item.appendChild(title);
+      item.appendChild(document.createElement('br'));
+      item.appendChild(detail);
+      list.appendChild(item);
+    }
   } catch (e) {
     summary.textContent = `体检接口没通：${e.message}`;
   } finally {
@@ -486,7 +525,7 @@ function writeConfigToPage(c) {
   document.getElementById('loginBox').innerHTML = login.loggedIn === false
     ? '<p class="danger">❌ 抖音未登录：请点“重新扫码登录”，在 Edge 里扫码 / 过验证码。</p>'
     : `<p class="muted">登录状态：${login.loggedIn === true ? '已登录' : '未检查（用 dy_login_status 查一次）'}${login.lastCheckedAt ? `，上次检查 ${login.lastCheckedAt}` : ''}</p>`;
-  // v0.3.2: 核心包顶上的登录节，和安全包里的登录状态是同一份数据。
+  // v0.4.0: 核心包顶上的登录节，和安全包里的登录状态是同一份数据。
   const coreLogin = document.getElementById('loginBoxCore');
   if (coreLogin) {
     coreLogin.innerHTML = login.loggedIn === false
@@ -509,6 +548,7 @@ function writeConfigToPage(c) {
 
 async function load() {
   setStatus('正在加载…');
+  await loadToken();
   const [chatsRes, allowedRes, configRes, statusRes] = await Promise.all([
     fetch('/api/chats').then((r) => r.json()),
     fetch('/api/allowed').then((r) => r.json()),
@@ -576,8 +616,8 @@ async function save() {
   const cfg = readConfigFromPage();
   setStatus('正在保存…');
   const [allowedRes, configRes] = await Promise.all([
-    fetch('/api/allowed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed: items }) }).then((r) => r.json()),
-    fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) }).then((r) => r.json()),
+    postJson('/api/allowed', { allowed: items }),
+    postJson('/api/config', { config: cfg }),
   ]);
   if (allowedRes.ok && configRes.ok) {
     const rb = configRes.readBack;
@@ -601,14 +641,14 @@ document.getElementById('addBtn').addEventListener('click', () => {
   setStatus(`已把 ${name} 加入勾选，正在自动保存…`);
   scheduleAutoSave();
 });
-// v0.3.2 登录：核心包顶上的“打开 Edge 登录抖音”和安全包里的
+// v0.4.0 登录：核心包顶上的“打开 Edge 登录抖音”和安全包里的
 // “重新扫码登录”调同一个接口。失败时显示中文原因 + 修法
 // （playwright 没装时那份），不只剩英文原文。
 async function openLogin() {
   const help = document.getElementById('loginHelpCore');
   if (help) help.textContent = '';
   setStatus('正在打开 Edge 登录窗口…（请在 Edge 里扫码）');
-  const r = await fetch('/api/login/open', { method: 'POST' }).then((x) => x.json()).catch(() => ({ ok: false, message: '接口没通' }));
+  const r = await postJson('/api/login/open', {}).catch(() => ({ ok: false, message: '接口没通' }));
   if (r.ok) {
     setStatus('已打开 Edge，请在窗口里扫码登录，登录完点“刷新列表”。');
   } else {
@@ -620,12 +660,12 @@ async function openLogin() {
 document.getElementById('loginBtnCore').addEventListener('click', openLogin);
 document.getElementById('reloginBtn').addEventListener('click', openLogin);
 document.getElementById('clearRiskBtn').addEventListener('click', async () => {
-  const r = await fetch('/api/risk/clear', { method: 'POST' }).then((x) => x.json()).catch(() => ({ ok: false }));
+  const r = await postJson('/api/risk/clear', {}).catch(() => ({ ok: false }));
   setStatus(r.ok ? '✅ 风控暂停已解除。先确认 Edge 里没事再继续用写动作。' : '解除失败，请看服务器终端。');
   await load();
 });
 document.getElementById('cleanupBtn').addEventListener('click', async () => {
-  const r = await fetch('/api/cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dryRun: true }) }).then((x) => x.json()).catch(() => ({ ok: false }));
+  const r = await postJson('/api/cleanup', { dryRun: true }).catch(() => ({ ok: false }));
   setStatus(r.ok ? `演练：会删 ${r.removed} 个过期文件（${r.retentionDays} 天前）。确认要真删，在 DSH 里调 dy_cleanup。` : '清理接口没通。');
 });
 

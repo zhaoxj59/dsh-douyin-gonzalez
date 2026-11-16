@@ -1,4 +1,4 @@
-// DSH plugin entry, v0.3.4. Modular: 5 packages, one master switch each.
+// DSH plugin entry, v0.4.0. Modular: 5 packages, one master switch each.
 //   core (always on) / interact / discover / publish / safety.
 // A tool whose package is OFF returns package-disabled and does nothing.
 // Write tools additionally pass the risk gate (safety.risk.paused):
@@ -35,7 +35,7 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_sticker', pkg: 'interact', write: true, description: '给一个白名单会话发表情包：先按关键词从收藏的表情包里挑；没有收藏就发兜底文字，绝不假装发表了贴纸。贴纸本身需在 Edge 里人工点发时以挑好的为准。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, keyword: { type: 'string' } }, required: ['conversationId'] }, execute: 'sticker' },
   { name: 'dy_collect_sticker', pkg: 'interact', description: '收藏一个表情包到本地 stickers.json（名字 + 关键词），以后 dy_sticker 按关键词挑它。只写本地文件，不动抖音账号。', parameters: { type: 'object', properties: { name: { type: 'string' }, keywords: { type: 'string' } }, required: ['name'] }, execute: 'collectSticker' },
   { name: 'dy_spark', pkg: 'interact', write: true, description: '给一个白名单好友续火花：发一句一言随机文案。每天几次、几点发、快断预警天数都在设置页 → 互动包 → 续火花里设。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, lastContactAt: { type: 'string' } }, required: ['conversationId'] }, execute: 'spark' },
-  { name: 'dy_reply_own_comments', pkg: 'interact', write: true, description: '回自己视频下的新评论：只看最近 N 天内的作品，每次回几条、每天最多几条、随机还是按顺序、同人只回一次，都在设置页 → 互动包里设。', parameters: { type: 'object', properties: { videoId: { type: 'string' } } }, execute: 'replyOwn' },
+  { name: 'dy_reply_own_comments', pkg: 'interact', write: true, description: '回自己视频下的新评论：旧实现读的是推荐流首页的路人评论、会回错视频和内容，正在重写；开关可先关掉。原设定：只看最近 N 天内的作品，每次回几条、每天最多几条、随机还是按顺序、同人只回一次，都在设置页 → 互动包里设。', parameters: { type: 'object', properties: { videoId: { type: 'string' } } }, execute: 'replyOwn' },
   // discover
   { name: 'dy_hot', pkg: 'discover', description: '读抖音热榜（不用编数据，页面读不到就报 selector-mismatch）。', parameters: { type: 'object', properties: {} }, execute: 'hot' },
   { name: 'dy_search', pkg: 'discover', description: '按关键词搜视频。', parameters: { type: 'object', properties: { keyword: { type: 'string' } }, required: ['keyword'] }, execute: 'search' },
@@ -43,7 +43,7 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_creator_videos', pkg: 'discover', description: '读一个指定博主最近的作品（给博主主页链接）。', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] }, execute: 'creatorVideos' },
   { name: 'dy_diagnose_creator', pkg: 'discover', description: '创作者诊断（基础版）：把播放/点赞/评论/完播摆出来，列出最可能的原因让鱼分析。不编流量池、不编账号分、不保证爆款。', parameters: { type: 'object', properties: { videoId: { type: 'string' }, title: { type: 'string' }, plays: { type: 'number' }, likes: { type: 'number' }, comments: { type: 'number' }, completionPct: { type: 'number' } }, required: ['videoId'] }, execute: 'diagnose' },
   { name: 'dy_my_posts', pkg: 'discover', description: '看我自己发的作品和每条数据（读不到的数记 null，不编）。', parameters: { type: 'object', properties: {} }, execute: 'myPosts' },
-  { name: 'dy_watch_sources', pkg: 'discover', description: '按设置页 → 发现包勾的来源（推荐流/热榜/搜索/关注/指定博主）刷一轮；没开其他来源就只刷推荐流。', parameters: { type: 'object', properties: { minutes: { type: 'number' } } }, execute: 'watchSources' },
+  { name: 'dy_watch_sources', pkg: 'discover', description: '按设置页 → 发现包勾的来源刷一轮（当前版本实际只刷推荐流，来源导航还没接上，返回里会写明实际刷的来源）。', parameters: { type: 'object', properties: { minutes: { type: 'number' } } }, execute: 'watchSources' },
   // publish
   { name: 'dy_post', pkg: 'publish', write: true, description: '发一条抖音视频。必须给本地视频文件路径 + 文案；发片包总开关 + 自动发视频开关和每日次数按 config.json（默认 0 / 关闭）。没有文件不发，每次发布都记进 post-log.jsonl。', parameters: { type: 'object', properties: { file: { type: 'string' }, caption: { type: 'string' } }, required: ['file'] }, execute: 'post' },
   { name: 'dy_publish_draft', pkg: 'publish', write: true, description: '把一条视频记为草稿（默认存草稿）：标题按模板 {date} 替换、带默认话题；只记草稿不上传，正式发布请在创作者中心点发布。', parameters: { type: 'object', properties: { file: { type: 'string' }, caption: { type: 'string' } }, required: ['file'] }, execute: 'publishDraft' },
@@ -77,13 +77,17 @@ async function runTool(toolName, args, dataDir) {
   switch (toolName) {
     case 'dy_watch': {
       const { watchRound } = await import('./lib/browser.mjs');
-      return watchRound(dir, { minutes: args?.minutes ?? config.watch.minutesPerRound ?? 10 });
+      // v0.4.0 (M6): minutes 封顶 120 分钟（与配置项 minutesPerRound 的 1–120 一致），
+      // 不让模型 / AstrBot 传个天文数字把一轮刷成几天。
+      const minutes = Math.min(120, Math.max(1, Number(args?.minutes ?? config.watch.minutesPerRound ?? 10) || 10));
+      return watchRound(dir, { minutes });
     }
     case 'dy_watch_sources': {
       const { sourcePlan } = await import('./lib/discover.mjs');
       const plan = sourcePlan(dir, config);
       const { watchRound } = await import('./lib/browser.mjs');
-      const res = await watchRound(dir, { minutes: args?.minutes ?? config.watch.minutesPerRound ?? 10 });
+      const minutes = Math.min(120, Math.max(1, Number(args?.minutes ?? config.watch.minutesPerRound ?? 10) || 10));
+      const res = await watchRound(dir, { minutes });
       return { ...res, sources: plan.sources, sourceMessage: plan.message };
     }
     case 'dy_list_chats': {
@@ -91,12 +95,12 @@ async function runTool(toolName, args, dataDir) {
       return listChats(dir);
     }
     case 'dy_dm_reply': {
-      if (!args?.conversationId || !args?.text) return { ok: false, error: 'missing-args', message: 'dy_dm_reply 需要 conversationId 和 text。' };
+      if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply 需要 conversationId 和非空的 text。' };
       const { replyTo } = await import('./lib/dm.mjs');
       return replyTo(dir, { conversationId: args.conversationId, text: args.text });
     }
     case 'dy_dm_reply_stranger': {
-      if (!args?.conversationId || !args?.text) return { ok: false, error: 'missing-args', message: 'dy_dm_reply_stranger 需要 conversationId 和 text。' };
+      if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply_stranger 需要 conversationId 和非空的 text。' };
       const { replyToStranger } = await import('./lib/dm.mjs');
       return replyToStranger(dir, { conversationId: args.conversationId, text: args.text });
     }
@@ -107,12 +111,20 @@ async function runTool(toolName, args, dataDir) {
       const kind = toolName === 'dy_like' ? 'like' : toolName === 'dy_comment' ? 'comment' : toolName === 'dy_favorite' ? 'favorite' : 'mention';
       const videoId = args.videoId;
       if (!videoId) return { ok: false, error: 'missing-args', message: `${toolName} 需要 videoId。` };
+      // v0.4.0 (M2): text 不校验时，空评论会在浏览器层抛错、@ 评论会发出
+      // “@名字 undefined”。分发层统一先拦。
+      if ((kind === 'comment' || kind === 'mention') && !String(args?.text ?? '').trim()) {
+        return { ok: false, error: 'missing-args', message: `${toolName} 需要非空的 text（评论内容）。` };
+      }
       const rot = rotationGate(dir, videoId, kind);
       if (!rot.ok) return { ok: false, ...rot };
       if (kind === 'mention') {
         const { canMentionComment } = await import('./lib/interact.mjs');
         const mg = canMentionComment(dir, config);
         if (!mg.ok) return { ok: false, ...mg };
+        // v0.4.0 (M4): @ 评论之前没有去重，同一视频一天内可重复 @。
+        // 点赞 / 评论 / 收藏三支都有去重，这里补上。
+        if (alreadyActedOnVideo(dir, 'mention', videoId)) return { ok: false, reason: 'duplicate', message: '这个视频已经 @ 评论过，不重复。' };
         const { commentCurrentVideo } = await import('./lib/browser.mjs');
         const result = await commentCurrentVideo(dir, { videoId, text: `@${mg.mentionName} ${args.text}` });
         if (result.sent) logAction(dir, { type: 'mention', status: 'sent', videoId, text: String(args.text).slice(0, 200) });
@@ -141,6 +153,11 @@ async function runTool(toolName, args, dataDir) {
     case 'dy_share': {
       const { planShare, shareVideo } = await import('./lib/share.mjs');
       const video = { videoId: args.videoId, caption: args.caption ?? '', tags: args.tags ?? [] };
+      // v0.4.0: 分享也过商业过滤（浏览器层的 commercialGate 会再拦一次，
+      // 这里先拦住，免得 planShare 白算一轮）。
+      const { classifyCommercialCaption } = await import('./lib/content-filter.mjs');
+      const cf = classifyCommercialCaption(video.caption);
+      if (cf.skip) return { ok: false, reason: 'commercial-skipped', message: `该视频带购物信号（${cf.reason}），按商业过滤规则跳过，不分享。` };
       const plan = planShare(dir, video, config);
       if (!plan.ok) return { ok: false, ...plan };
       if (!plan.recipients.length) return { ok: true, shared: 0, message: plan.message };
@@ -155,6 +172,9 @@ async function runTool(toolName, args, dataDir) {
       }
       return { ok: true, shared: results.filter((r) => r.sent).length, results };
     }
+    // NOTE (L3): 表情包兜底与续火花经 sendDm 发私信，计入各自上限与
+    // 每日总闸，但不占 dmReplyPerDay（不写 reply-log）。这是有意为之，
+    // 不是漏记 —— 想改成占私信额度再说。
     case 'dy_sticker': {
       if (!args?.conversationId) return { ok: false, error: 'missing-args', message: 'dy_sticker 需要 conversationId。' };
       const { pickSticker, canSticker } = await import('./lib/interact.mjs');
@@ -188,21 +208,12 @@ async function runTool(toolName, args, dataDir) {
       return { ok: Boolean(result.sent), sent: Boolean(result.sent), warn: plan.warn, text: plan.text };
     }
     case 'dy_reply_own_comments': {
-      const { pickOwnComments } = await import('./lib/interact.mjs');
-      const { listOwnComments, commentCurrentVideo } = await import('./lib/browser.mjs');
-      const listed = await listOwnComments(dir, { videoId: args.videoId });
-      if (!listed.ok) return listed;
-      const picked = pickOwnComments(dir, config, listed.comments);
-      if (!picked.ok) return { ok: false, ...picked };
-      const results = [];
-      for (const c of picked.picked) {
-        const totalGate = outwardBudgetGate(dir, config);
-        if (!totalGate.ok) { results.push({ commentId: c.id, sent: false, reason: totalGate.reason, message: totalGate.message }); break; }
-        const res = await commentCurrentVideo(dir, { videoId: args.videoId ?? c.id, text: c.text ?? '' }).catch(() => ({ ok: false, uncertain: true }));
-        if (res.sent) logAction(dir, { type: 'reply-own', status: 'sent', commentId: c.id, userId: c.userId });
-        results.push({ commentId: c.id, sent: Boolean(res.sent) });
-      }
-      return { ok: true, replied: results.filter((r) => r.sent).length, results };
+      // v0.4.0 (H2/H3): 暂时停用 —— 旧实现读的是推荐流首页的评论
+      // （listOwnComments 打开 DOUYIN_HOME，id 是 c-0/c-1、userId 恒为空），
+      // 会把首页路人评论的原话当成自己的评论发到当前推荐视频上；
+      // oncePerUser 也因 userId 为空退化成“每天只能回 1 条”。
+      // 等重写为“打开自己某条视频页读真实评论 + 模型现写回复”后再开。
+      return { ok: false, reason: 'disabled', message: '回自己视频评论暂时停用：旧实现会回错视频、回错内容（读的是首页路人评论），正在重写。开关可先关掉。' };
     }
     case 'dy_hot': { const { getHotList } = await import('./lib/browser.mjs'); return getHotList(dir); }
     case 'dy_search': {
@@ -291,7 +302,9 @@ async function runTool(toolName, args, dataDir) {
     }
     case 'dy_cleanup': {
       const { cleanupOld } = await import('./lib/safety.mjs');
-      return cleanupOld(dir, { retentionDays: config.cleanup.retentionDays ?? 30, dryRun: Boolean(args?.dryRun) });
+      // v0.4.0 (M8): 默认真删改成默认演练 —— 不传 dryRun 就是只看不删，
+      // 须显式传 dryRun: false 才真删（与设置服务 /api/cleanup 默认一致）。
+      return cleanupOld(dir, { retentionDays: config.cleanup.retentionDays ?? 30, dryRun: args?.dryRun === false ? false : true });
     }
     case 'dy_memory': {
       const { appendMemory, readMemory } = await import('./lib/safety.mjs');
@@ -337,7 +350,7 @@ export async function apply(ctx, config = {}) {
   if (process.env.DSH_DOUYIN_AUTO_SETTINGS !== '0') {
     try {
       const { startSettingsServer } = await import('./settings/settings-server.mjs');
-      const started = await startSettingsServer();
+      const started = await startSettingsServer(dataDir);
       console.log(started
         ? '[dsh-douyin-gonzalez] settings server auto-started on 127.0.0.1:8765'
         : '[dsh-douyin-gonzalez] settings server did not bind port 8765; check whether another process owns it');
@@ -381,3 +394,6 @@ export async function apply(ctx, config = {}) {
   }
 
 }
+
+// Exported for selfcheck only; DSH calls tools through apply().
+export { runTool };

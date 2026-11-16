@@ -1,5 +1,5 @@
-// Self-check v0.3.2 (no DSH, no Douyin login, no network needed).
-// Verifies: manifest + patch + entry exports, the 32 tools in 5 packages,
+// Self-check v0.4.0 (no DSH, no Douyin login, no network needed).
+// Verifies: manifest + patch + entry exports, the 33 tools in 5 packages,
 // settings page (5 tabs + top status cards + all new sections),
 // config v4 defaults + round-trip + v2/v3 migration, allowed.json v2,
 // stranger gate, caps, rotation, whitelist sharing, post/draft gates,
@@ -627,22 +627,22 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// v0.3.2: README is honest about online install + release + fish.
+// v0.4.0: README is honest about online install + release + fish.
 {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
-  check('README documents GitHub clone install', readme.includes('git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git'));
+  check('README documents GitHub clone install', readme.includes('git clone -b release/v0.4.0-douyin-enhanced --single-branch https://github.com/zhaoxj59/dsh-douyin-gonzalez.git'));
   check('README says plainly npm is NOT published yet', readme.includes('还没发布到 npm'));
-  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.3.4'));
-  check('README documents git tag + gh release', readme.includes('git tag v0.3.4') && readme.includes('gh release create'));
+  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.4.0'));
+  check('README documents git tag + gh release', readme.includes('git tag v0.4.0') && readme.includes('gh release create'));
   check('README documents fish share as one-way only', readme.includes('单向分享') && readme.includes('不是双向实时对话'));
   check('README documents DSH native panel limits', readme.includes('DSH 本体是第三方的') && readme.includes('原生面板'));
   check('README documents auto-save', readme.includes('自动保存') && readme.includes('500ms'));
   check('README documents login on the first page', readme.includes('核心包最上面') || readme.includes('登录抖音'));
-  check('README version is 0.3.4', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.4）'));
+  check('README version is 0.4.0', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音独立插件（v0.4.0）'));
 }
 
 // Settings server really runs: save config -> read back identical,
-// POST /api/health returns the 12 checks (Edge probe is unknown on
+// POST /api/health returns the 13 checks (Edge probe is unknown on
 // this Linux box — no Edge — and must not crash the endpoint).
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-server-'));
@@ -661,17 +661,24 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
     }
     check('settings server starts on a temp port', up);
     if (up) {
-      const saveRes = await fetch(`${base}/api/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: { packages: { interact: { enabled: true } }, autoLike: { enabled: true, perDay: 7 }, share: { enabled: false }, caps: { totalOutwardPerDay: 25 } } }) }).then((r) => r.json());
+      // v0.4.0 (H1): 写接口要带 token；不带 token 直接 401。
+      const tokenRes = await fetch(`${base}/api/token`).then((r) => r.json()).catch(() => ({}));
+      const settingsToken = tokenRes.token || '';
+      check('settings server GET /api/token returns a token', typeof settingsToken === 'string' && settingsToken.length >= 32);
+      const noTokenRes = await fetch(`${base}/api/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: {} }) }).then((r) => r.json());
+      check('settings server POST without token is rejected (401)', noTokenRes.ok === false && noTokenRes.error === 'unauthorized');
+      const authHeaders = { 'Content-Type': 'application/json', 'X-Douyin-Token': settingsToken };
+      const saveRes = await fetch(`${base}/api/config`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ config: { packages: { interact: { enabled: true } }, autoLike: { enabled: true, perDay: 7 }, share: { enabled: false }, caps: { totalOutwardPerDay: 25 } } }) }).then((r) => r.json());
       check('settings server POST /api/config saves', saveRes.ok === true);
       const back = await fetch(`${base}/api/config`).then((r) => r.json());
       check('settings server GET /api/config reads back the save', back.autoLike?.perDay === 7 && back.packages?.interact?.enabled === true && back.caps?.totalOutwardPerDay === 25 && back.share?.enabled === false);
-      const allowedSave = await fetch(`${base}/api/allowed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed: [{ id: 'conv-1', name: '阿明', kind: 'dm', interests: ['美食'] }] }) }).then((r) => r.json());
+      const allowedSave = await fetch(`${base}/api/allowed`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ allowed: [{ id: 'conv-1', name: '阿明', kind: 'dm', interests: ['美食'] }] }) }).then((r) => r.json());
       check('settings server POST /api/allowed saves + reads back', allowedSave.ok === true && allowedSave.readBack?.allowed?.length === 1);
       const allowedBack = await fetch(`${base}/api/allowed`).then((r) => r.json());
       check('settings server GET /api/allowed reads back the save', allowedBack.allowed?.[0]?.id === 'conv-1' && allowedBack.allowed?.[0]?.interests?.[0] === '美食');
-      const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST' }).then((r) => r.json());
+      const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/login/open gives friendly playwright-missing error on this box', loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install') && loginOpen.message.includes('playwright'), loginOpen.message ?? '');
-      const health = await fetch(`${base}/api/health`, { method: 'POST' }).then((r) => r.json());
+      const health = await fetch(`${base}/api/health`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/health returns 13 checks', Array.isArray(health.checks) && health.checks.length === 13 && typeof health.summary === 'string', health.summary ?? '');
       check('settings server health: edge-login is unknown on Linux, not a crash', health.checks?.find((c) => c.id === 'edge-login')?.status === 'unknown');
       check('settings server health: share OFF passes dangerous-off only if nothing else is on', health.checks?.find((c) => c.id === 'dangerous-off')?.status === 'fail');
@@ -679,6 +686,32 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   } finally {
     child.kill('SIGTERM');
     await new Promise((r) => setTimeout(r, 300));
+    delete process.env.DSH_DOUYIN_DATA_DIR;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// v0.4.0 review fixes: dispatch-level gates, no browser needed.
+{
+  const { runTool } = await import('./dsh-plugin.mjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-dispatch-'));
+  process.env.DSH_DOUYIN_DATA_DIR = tmp;
+  try {
+    const { saveConfig } = await import('./lib/config.mjs');
+    const { logAction } = await import('./lib/store.mjs');
+    saveConfig(tmp, { packages: { interact: { enabled: true }, discover: { enabled: true }, safety: { enabled: true } }, autoComment: { enabled: true, perDay: 3 }, commentMention: { enabled: true, perDay: 3, mentionName: '鱼' }, caps: { mentionPerDay: 3, totalOutwardPerDay: 20 } });
+    const r1 = await runTool('dy_reply_own_comments', {}, tmp);
+    check('dy_reply_own_comments is disabled pending rewrite (H2/H3)', r1.ok === false && r1.reason === 'disabled');
+    const r2 = await runTool('dy_comment', { videoId: 'v-1' }, tmp);
+    check('dy_comment without text is refused, not a crash (M2)', r2.ok === false && r2.error === 'missing-args');
+    const r3 = await runTool('dy_creator_videos', { url: 'http://127.0.0.1:3080/evil' }, tmp);
+    check('dy_creator_videos refuses non-douyin hosts (M9)', r3.ok === false && r3.error === 'bad-host');
+    const r4 = await runTool('dy_cleanup', {}, tmp);
+    check('dy_cleanup defaults to dry-run (M8)', r4.ok === true && r4.dryRun === true);
+    logAction(tmp, { type: 'mention', status: 'sent', videoId: 'v-9' });
+    const r5 = await runTool('dy_comment_mention', { videoId: 'v-9', text: '你好' }, tmp);
+    check('dy_comment_mention refuses a video already @-commented (M4)', r5.ok === false && r5.reason === 'duplicate');
+  } finally {
     delete process.env.DSH_DOUYIN_DATA_DIR;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
