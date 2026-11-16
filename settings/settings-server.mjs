@@ -187,6 +187,22 @@ const server = http.createServer((req, res) => {
     json(req, res, 200, readMemory());
     return;
   }
+  if (req.method === 'POST' && url.pathname === '/api/aurabot/send') {
+    if (!requireToken(req, res)) return;
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; if (body.length > 20000) req.destroy(); });
+    req.on('end', async () => {
+      try {
+        const parsed = JSON.parse(body || '{}');
+        const { sendFromAurabot } = await import('../lib/aurabot-send.mjs');
+        const result = await sendFromAurabot(undefined, parsed);
+        json(req, res, result.ok ? 200 : result.duplicate ? 409 : 400, result);
+      } catch (error) {
+        json(req, res, 400, { ok: false, error: 'aurabot-send-failed', message: error.message });
+      }
+    });
+    return;
+  }
   if (req.method === 'POST' && url.pathname === '/api/health') {
     if (!requireToken(req, res)) return;
     import('../lib/health.mjs').then(async (h) => {
