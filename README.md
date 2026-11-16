@@ -28,7 +28,7 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 ## v0.3.3：用户提的 6 个问题，逐条落地
 
 1. **报错说人话**：playwright 没装时，以前只扔一句英文 `Cannot find package 'playwright'`。现在 `lib/browser.mjs` 里 import 失败就换成中文原因 + 一步一步的修法（进 `C:\dsh-douyin-gonzalez` 跑 `pnpm install`，装不上就开全局/TUN 再跑或改跑 `npm install`，装完看 `node_modules\playwright` 文件夹在不在）。体检里 Edge 登录那项、设置页 `/api/login/open`、工具 `dy_login_status` 都透传这份中文办法，设置页登录失败时也直接显示出来。
-2. **在线下载**：代码已按 npm 发布要求准备好（`package.json` 有 name/version/files/engines/license，加了 repository/homepage/bugs）。**但还没真的发布到 npm**——发布要用户自己的 npm 账号登录一次、跑 `npm publish`，这一步我做不了（没有用户的 npm 账号/Token），也没假装已发布。发布后的安装命令会是 `dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4`。现在能在线装的办法是 GitHub clone（见“安装”一节），仓库：https://github.com/zhaoxj59/dsh-douyin-gonzalez 。打 Release 的办法也写在“安装”一节了（`git tag v0.3.4` + `gh release create`）。
+2. **在线下载**：代码已按 npm 发布要求准备好（`package.json` 有 name/version/files/engines/license，加了 repository/homepage/bugs）。**但还没真的发布到 npm**——发布要用户自己的 npm 账号登录一次、跑 `npm publish`，这一步我做不了（没有用户的 npm 账号/Token），也没假装已发布。发布后的安装命令会是 `dsh plugin --profile web add dsh-douyin-gonzalez@0.4.0`。现在能在线装的办法是 GitHub clone（见“安装”一节），仓库：https://github.com/zhaoxj59/dsh-douyin-gonzalez 。打 Release 的办法也写在“安装”一节了（`git tag v0.3.4` + `gh release create`）。
 3. **内置到 DSH 里？做不到，但常用项收进了 DSH 原生面板**：DSH 本体是第三方的，改不了、塞不进去，这个没法假装。能做的上限是 DSH 客户端提供的设置注入点（`client.js`）：在 DSH 设置里挂一个“刷抖音（自写）”分区，放最常用的几项（核心包、危险动作总开关、白名单人数、一键体检、登录抖音）和完整设置页地址。5 个包的全部设置（几十个开关 + 数字 + 选人勾选）放不进原生面板，只能留在本地网页设置页（`http://127.0.0.1:8765/`）。所以：原生面板 = 快捷入口 + 常用开关；网页页 = 完整设置。`client.js` 里所有挂接都先判运行时有没有这个能力，没有就静默跳过，绝不拖垮插件本体。
 4. **登录放第一页**：设置页核心包最上面加了“🔑 登录抖音”一节：登录状态 + “打开 Edge 登录抖音”按钮 + 登录失败时显示第 1 条的中文修法。吸顶目录条里也加了“🔑 登录抖音”，一点就跳过去。安全包里原来的“重新扫码登录”保留，两处调同一个接口。
 5. **设置自动保存**：开关/数字/勾选一改就自动保存（500ms 防抖，调已有的 `POST /api/config` + `/api/allowed`），存成功顶部写“已自动保存 HH:MM:SS”，失败写红字原因；“保存全部设置”按钮还留着，当手动兜底。选人勾选也一样，勾完自动保存读回核对。
@@ -145,7 +145,7 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 - Node.js ≥ 22.13，DSH `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0`（与 LockyBee 1.4.7 相同的范围；DSH 0.2.2-rc.2 不在官方验证表里，见“未验证”）
 - 一个支持看图的模型（刷视频要看画面才有意义）
 
-## 安装 / 更新到 v0.3.4
+## 安装 / 更新到 v0.4.0（预发布分支）
 
 ### 办法一：GitHub clone（现在就能在线装）
 
@@ -157,7 +157,7 @@ node selfcheck.mjs
 dsh plugin --profile web add link:C:\dsh-douyin-gonzalez
 ```
 
-更新：进这个文件夹跑 `git pull`，再 `pnpm install`，重装插件即可。
+更新：进入该目录执行 `git pull origin release/v0.4.0-douyin-enhanced`，再运行 `npm install` 和 `npm test`。此版本与旧版插件同名，切换前请先备份旧插件目录；不要删除 DSH 的插件数据目录。
 
 ### 办法二：npm 在线安装（还没发布，先别跑）
 
@@ -173,9 +173,9 @@ dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4
 
 ```powershell
 cd C:\dsh-douyin-gonzalez
-git tag v0.3.4
-git push origin v0.3.4
-gh release create v0.3.4 --title "v0.3.4" --notes "友好报错、登录放第一页、自动保存、DSH 原生面板、大肥鱼记忆分享"
+git tag v0.4.0
+ git push origin v0.4.0
+ gh release create v0.4.0 --title "v0.4.0" --notes "互动总额度强制拦截、商业内容过滤、平台挑战熔断"
 ```
 
 ### 本地自检
@@ -188,7 +188,7 @@ node selfcheck.mjs
 
 `selfcheck.mjs` 不需要 DSH、不用登录抖音、不用联网（除 `pnpm install` 本身），跑完应全部 PASS。
 
-DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.3.4`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
+DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.4.0`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
 
 ```powershell
 dsh plugin --profile web add link:C:\path\to\dsh-douyin-gonzalez
