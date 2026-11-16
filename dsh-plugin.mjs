@@ -22,7 +22,7 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_list_chats', pkg: 'core', description: '读取抖音私信会话列表，写入本地 chats.json（好友互动页的勾选来源）。', parameters: { type: 'object', properties: {} }, execute: 'listChats' },
   { name: 'dy_dm_reply', pkg: 'core', description: '给一个已许可会话回一条私信。只回 allowed.json 里勾选过的会话；每人每天上限、全天上限按 config.json；发送结果不明时不自动重发。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReply' },
   { name: 'dy_dm_reply_stranger', pkg: 'core', description: '给一个陌生人回一条私信。只有在设置页显式打开“陌生人私信回复”开关时才可用，有独立的每日上限（默认 3 条），和白名单回复分开计数。默认关闭。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReplyStranger' },
-  { name: 'dy_dm_ai_reply', pkg: 'core', write: true, description: '把收到的抖音私信交给 Aurabot，使用大肥鱼人格生成回复并由 DSH 自动发送。白名单自动回复；陌生人仅在陌生人回复开关开启时允许。需要配置 DSH_AURABOT_BASE_URL 和 DSH_AURABOT_TOKEN。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, senderId: { type: 'string' }, senderName: { type: 'string' }, message: { type: 'string' }, eventId: { type: 'string' }, recentMessages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } } }, required: ['conversationId', 'senderId', 'message'] }, execute: 'dmAiReply' },
+  { name: 'dy_dm_ai_reply', pkg: 'core', write: true, description: '把收到的抖音私信交给 Aurabot，使用大肥鱼人格生成回复并由 DSH 自动发送。白名单自动回复；陌生人仅在陌生人回复开关开启时允许。需要配置 DSH_AURABOT_BASE_URL 和 DSH_AURABOT_TOKEN。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, senderId: { type: 'string' }, senderName: { type: 'string' }, message: { type: 'string' }, eventId: { type: 'string' }, recentMessages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } } }, required: ['conversationId', 'senderId', 'message', 'eventId'] }, execute: 'dmAiReply' },
   { name: 'dy_dm_ai_proactive', pkg: 'core', write: true, description: '让 Aurabot 为一个已许可联系人生成主动私信并由 DSH 发送。仅允许 allowed.json 中的联系人；受私信每日额度和风控暂停控制，不群发。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, senderId: { type: 'string' }, senderName: { type: 'string' }, goal: { type: 'string' }, recentMessages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } } }, required: ['conversationId', 'senderId', 'goal'] }, execute: 'dmAiProactive' },
   { name: 'dy_aurabot_status', pkg: 'core', description: '检查 DSH 与 Aurabot API 的本地配置状态，不会发送消息。', parameters: { type: 'object', properties: {} }, execute: 'aurabotStatus' },
   { name: 'dy_daily_report', pkg: 'core', description: '从本地观看/回复/点赞/评论/分享/发视频记录生成当天的 Markdown 日报，不额外调模型。', parameters: { type: 'object', properties: { date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' } } }, execute: 'dailyReport' },
@@ -102,8 +102,8 @@ async function runTool(toolName, args, dataDir) {
       return { ok: true, ...aurabotBridgeStatus() };
     }
     case 'dy_dm_ai_reply': {
-      if (!args?.conversationId || !args?.senderId || !String(args?.message ?? '').trim()) {
-        return { ok: false, error: 'missing-args', message: 'Aurabot 私信回复需要 conversationId、senderId 和 message。' };
+      if (!args?.conversationId || !args?.senderId || !args?.eventId || !String(args?.message ?? '').trim()) {
+        return { ok: false, error: 'missing-args', message: 'Aurabot 私信回复需要 conversationId、senderId、eventId 和 message。' };
       }
       const allowedGate = canReply(dir, args.conversationId);
       const stranger = allowedGate.reason === 'not-allowed';
@@ -119,6 +119,7 @@ async function runTool(toolName, args, dataDir) {
         recent_messages: args.recentMessages ?? [],
       });
       if (!generated.ok) return generated;
+      if (generated.duplicate) return { ok: true, sent: false, duplicate: true, message: '该消息事件已处理过，阻止重复发送。' };
       if (!generated.should_send || !String(generated.reply_text ?? '').trim()) {
         return { ok: true, sent: false, reason: generated.reason ?? 'aurabot-no-reply', message: 'Aurabot 判断本轮不需要发送回复。' };
       }
