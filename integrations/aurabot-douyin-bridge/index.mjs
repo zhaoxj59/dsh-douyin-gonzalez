@@ -17,7 +17,7 @@ function cleanText(v, max = MAX_TEXT) {
 function safeId(v) {
   return cleanText(v, 160).replace(/[^\p{L}\p{N}_.:@-]/gu, '_');
 }
-function json(res, status, value) {
+function json(api, res, status, value) {
   return res.end(JSON.stringify(value), status);
 }
 
@@ -111,15 +111,15 @@ export default {
       return { reply_text: replyText, should_send: true, conversation_id: conversationId || null };
     };
     const route = (name, task) => api.route('/' + name, async (req, res) => {
-      if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'method-not-allowed' });
+      if (req.method !== 'POST') return json(api, res, 405, { ok: false, error: 'method-not-allowed' });
       const auth = authenticate(req);
-      if (!auth.ok) return json(res, auth.status, { ok: false, error: auth.error });
+      if (!auth.ok) return json(api, res, auth.status, { ok: false, error: auth.error });
       try {
         const input = await bodyOf(req);
         const eventId = cleanText(input.event_id, 180);
-        if (task === 'message' && !eventId) return json(res, 400, { ok: false, error: 'event_id-required' });
+        if (task === 'message' && !eventId) return json(api, res, 400, { ok: false, error: 'event_id-required' });
         const events = read(eventsFile, {});
-        if (eventId && events[eventId]) return json(res, 200, { ok: true, duplicate: true, ...events[eventId] });
+        if (eventId && events[eventId]) return json(api, res, 200, { ok: true, duplicate: true, ...events[eventId] });
         const result = await think({ ...input, task });
         if (eventId) {
           events[eventId] = result;
@@ -128,17 +128,17 @@ export default {
           write(eventsFile, events);
         }
         logger.info('处理抖音桥接请求：', task, input.conversation_id || input.sender_id || 'unknown');
-        return json(res, 200, { ok: true, ...result });
+        return json(api, res, 200, { ok: true, ...result });
       } catch (error) {
         logger.warn('抖音桥接请求失败：', error.message);
-        return json(res, 400, { ok: false, error: cleanText(error.message, 200) });
+        return json(api, res, 400, { ok: false, error: cleanText(error.message, 200) });
       }
     });
     api.route('/health', async (req, res) => {
       const cfg = api.settings();
       const auth = authenticate(req);
-      if (!auth.ok) return json(res, auth.status, { ok: false, error: auth.error });
-      return json(res, 200, { ok: true, module: 'douyin-bridge', enabled: Boolean(cfg.enabled), api: 1 });
+      if (!auth.ok) return json(api, res, auth.status, { ok: false, error: auth.error });
+      return json(api, res, 200, { ok: true, module: 'douyin-bridge', enabled: Boolean(cfg.enabled), api: 1 });
     });
     route('message', 'message');
     route('draft', 'draft');
