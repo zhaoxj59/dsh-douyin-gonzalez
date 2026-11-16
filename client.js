@@ -1,4 +1,4 @@
-// DSH client half, v0.3.3 — 挂进 DSH 设置面板的正确写法。
+// DSH client half, v0.4.0 — 挂进 DSH 设置面板的正确写法。
 //
 // v0.3.2 用错了 API：ctx.get('@deepseek-ai/dsh-client-ui-settings-general')
 // + 旧写法里调的那几个方法在 DSH 里根本不存在，所以设置里
@@ -96,7 +96,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
         }) : null;
 
         return el('div', { style: { padding: 16, maxWidth: 640 } },
-          el('h2', { style: { margin: '0 0 8px' } }, '刷抖音（自写）v0.3.3'),
+          el('h2', { style: { margin: '0 0 8px' } }, '刷抖音（自写）v0.4.0'),
           el('p', { style: { color: '#666', margin: '0 0 12px' } }, '核心包常驻开；互动/发现/发片/安全默认关，开哪个再开哪个。危险动作（点赞/评论/分享）默认全关。'),
           status && status.error === 'settings-off'
             ? el('p', { style: { color: '#b91c1c', background: '#fef2f2', padding: 10, borderRadius: 8 } }, '设置服务没跑：先在云电脑上进 C:\\dsh-douyin-gonzalez 跑 npm run settings，再刷新这个页面。')
