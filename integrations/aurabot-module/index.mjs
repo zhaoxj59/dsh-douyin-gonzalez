@@ -8,7 +8,7 @@ function authorized(req, secret) {
 function clean(value, max = 2000) { return String(value ?? '').trim().slice(0, max); }
 function dshHeaders(s) { return { 'content-type': 'application/json', 'x-douyin-token': String(s.dshToken ?? '') }; }
 async function dshRequest(s, route, payload) {
-  const base = String(s.dshBaseUrl ?? '').trim().replace(/\\/+$/, '');
+  const base = String(s.dshBaseUrl ?? '').trim().replace(/\/+$/, '');
   if (!base || !s.dshToken) throw new Error('请配置 DSH 地址和设置服务 Token。');
   const response = await fetch(base + route, { method: payload === undefined ? 'GET' : 'POST', headers: dshHeaders(s), body: payload === undefined ? undefined : JSON.stringify(payload), signal: AbortSignal.timeout(30000) });
   const result = await response.json().catch(() => ({}));
@@ -43,7 +43,7 @@ export default {
         '不要声称已经完成实际无法完成的操作；不确定时坦诚说明。',
         '联系人：' + (clean(body.senderName, 80) || '抖音联系人'),
         '近期对话：', ...recent, '对方最新消息：' + text,
-      ].join('\\n');
+      ].join('\n');
       const replyText = clean(await api.think(prompt, { title: '抖音私信回复', timeoutMs: 60000 }));
       return replyText ? { ok: true, eventId: body.eventId, replyText } : { ok: false, message: 'Aurabot 未生成有效回复。' };
     });
@@ -51,7 +51,7 @@ export default {
       const s = settings(); if (!s.enabled || !s.allowProactive) return { ok: false, message: '主动私信功能未启用。' };
       if (!authorized(req, s.sharedSecret)) return { ok: false, message: 'unauthorized' };
       const body = await api.core.http.body(req);
-      const prompt = ['请根据你当前的人格和记忆，为抖音联系人起草一条自然的主动私信。只输出正文。', '不要群发、骚扰、重复联系或无故打扰；尊重对方拒绝联系的意愿。', '联系人：' + clean(body.senderName, 80), '联系目的：' + clean(body.goal, 500), '上下文：' + clean(body.context, 1500)].join('\\n');
+      const prompt = ['请根据你当前的人格和记忆，为抖音联系人起草一条自然的主动私信。只输出正文。', '不要群发、骚扰、重复联系或无故打扰；尊重对方拒绝联系的意愿。', '联系人：' + clean(body.senderName, 80), '联系目的：' + clean(body.goal, 500), '上下文：' + clean(body.context, 1500)].join('\n');
       const replyText = clean(await api.think(prompt, { title: '抖音主动私信草稿', timeoutMs: 60000 }));
       return replyText ? { ok: true, replyText } : { ok: false, message: 'Aurabot 未生成有效私信。' };
     });
