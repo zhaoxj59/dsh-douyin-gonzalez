@@ -292,17 +292,10 @@ async function runTool(toolName, args, dataDir) {
     }
     case 'dy_login_status': {
       // v0.3.2: playwright 没装时返回中文原因 + 修法，不扔英文原文。
+      // v0.4.1: 探 + 存走 refreshLoginStatus，和 POST /api/login/refresh 同一份逻辑。
       try {
-        const { checkLoginStatus } = await import('./lib/browser.mjs');
-        const { recordLogin } = await import('./lib/safety.mjs');
-        const res = await checkLoginStatus(dir);
-        if (res.ok) {
-          const saved = recordLogin(dir, res.loggedIn);
-          const cfg = { ...config, login: saved };
-          const { saveConfig } = await import('./lib/config.mjs');
-          saveConfig(dir, cfg);
-        }
-        return res;
+        const { refreshLoginStatus } = await import('./lib/browser.mjs');
+        return await refreshLoginStatus(dir);
       } catch (e) {
         const { toFriendlyBrowserError } = await import('./lib/browser.mjs');
         return toFriendlyBrowserError(e);

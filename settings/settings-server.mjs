@@ -40,6 +40,7 @@ const HTML = fs.readFileSync(path.join(HERE, 'settings.html'), 'utf8');
 // （GET /api/token）；DSH 面板在回环源上时也能取到，拿不到时
 // 面板的写按钮会提示去设置页操作。
 let serverDataDir = null;
+let loginRefreshPromise = null;
 let cachedToken = null;
 function settingsToken() {
   if (cachedToken) return cachedToken;
@@ -165,6 +166,24 @@ const server = http.createServer((req, res) => {
       try { json(req, res, 200, await b.openLogin()); }
       catch (e) { const f = b.toFriendlyBrowserError(e); json(req, res, 500, { ...f, fix: f.fix }); }
     }).catch((e) => json(req, res, 500, { ok: false, error: 'browser-error', message: e.message, fix: '' }));
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/login/refresh') {
+    if (!requireToken(req, res)) return;
+    // v0.4.1: 面板 / 设置页的“刷新状态”真去 Edge 里探一次登录并存下来；
+    // 以前只读 config.json 里的旧值，登上后永远刷不回已登录。
+    // 并发刷新共用同一次探测；探失败不改存量状态。
+    if (!loginRefreshPromise) {
+      loginRefreshPromise = import('../lib/browser.mjs').then(async (b) => {
+        try { return await b.refreshLoginStatus(); }
+        catch (e) { const f = b.toFriendlyBrowserError(e); return { ...f }; }
+      }).catch((e) => ({ ok: false, error: 'browser-error', message: e.message, fix: '' }));
+    }
+    const pending = loginRefreshPromise;
+    pending.then((result) => {
+      if (loginRefreshPromise === pending) loginRefreshPromise = null;
+      json(req, res, result.ok ? 200 : 500, result);
+    });
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/risk/clear') {

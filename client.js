@@ -86,6 +86,23 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
             .finally(function () { setBusy(false); });
         }
 
+        function refreshStatus() {
+          // v0.4.1: “刷新状态”先真去 Edge 里探一次登录并存下来，再读状态；
+          // 以前只重读 config.json 里的旧值，登上后刷不回已登录。
+          if (token === null) { setMsg('正在取设置服务 token…'); return; }
+          if (!token) { setMsg('拿不到设置服务 token（面板跨源被拦）：请点“打开完整设置页”，在设置页里点“刷新列表”。'); return; }
+          setBusy(true); setMsg('正在重新探测登录状态…');
+          fetch(BASE + '/api/login/refresh', { method: 'POST', headers: { 'X-Douyin-Token': token } })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+              if (res.ok) setMsg(res.loggedIn ? '已登录。' : '抖音未登录：点“打开 Edge 登录抖音”扫码。');
+              else setMsg((res.message || '登录探测没跑起来') + '，显示的是上次的结果。');
+              load();
+            })
+            .catch(function (e) { setMsg('登录探测没跑起来：' + e.message + '，显示的是上次的结果。'); load(); })
+            .finally(function () { setBusy(false); });
+        }
+
         function openLogin() {
           if (token === null) { setMsg('正在取设置服务 token…'); return; }
           if (!token) { setMsg('拿不到设置服务 token（面板跨源被拦）：请点“打开完整设置页”，在设置页里点登录。'); return; }
@@ -123,7 +140,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
           el('div', { style: { display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' } },
             el('button', { disabled: busy, onClick: openLogin, style: { padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer' } }, '打开 Edge 登录抖音'),
             el('button', { disabled: busy, onClick: runHealth, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '一键体检'),
-            el('button', { disabled: busy, onClick: load, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '刷新状态'),
+            el('button', { disabled: busy, onClick: refreshStatus, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '刷新状态'),
             el('button', { onClick: function () { window.open(BASE + '/', '_blank'); }, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '打开完整设置页')),
           msg ? el('p', { style: { marginTop: 12, color: '#333' } }, msg) : null,
           health ? el('p', { style: { marginTop: 12, color: health.failed ? '#b91c1c' : '#16a34a' } }, '体检：通过 ' + health.passed + ' / ' + health.total + ' 项' + (health.failed ? ('，不通过 ' + health.failed + ' 项，点“打开完整设置页”看每项原因。') : '，全通过。')) : null,

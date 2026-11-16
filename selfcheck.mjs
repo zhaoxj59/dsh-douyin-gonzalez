@@ -114,6 +114,7 @@ const serverSrc = fs.readFileSync(path.join(ROOT, 'settings', 'settings-server.m
 check('settings server has /api/config', serverSrc.includes('/api/config'));
 check('settings server has /api/status', serverSrc.includes('/api/status'));
 check('settings server has /api/login/open', serverSrc.includes('/api/login/open'));
+check('settings server has /api/login/refresh', serverSrc.includes('/api/login/refresh'));
 check('settings server has /api/risk/clear', serverSrc.includes('/api/risk/clear'));
 check('settings server has /api/cleanup', serverSrc.includes('/api/cleanup'));
 check('settings server has /api/memory', serverSrc.includes('/api/memory'));
@@ -603,10 +604,26 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   check('client.js uses settings.section slot, not addSection', clientSrc.includes("settings.section") && !clientSrc.includes('addSection') && !clientSrc.includes('addToggle') && !clientSrc.includes('addButton'));
   check('client.js factory returns inject slots+locale', clientSrc.includes("inject = ['slots', 'locale']") && clientSrc.includes('module.exports.inject'));
   check('client.js registers section id douyin-gonzalez with label', clientSrc.includes("id: 'douyin-gonzalez'") && clientSrc.includes('刷抖音（自写）'));
-  check('client.js panel talks to local settings server', clientSrc.includes('127.0.0.1:8765') && clientSrc.includes('/api/config') && clientSrc.includes('/api/health') && clientSrc.includes('/api/login/open'));
+  check('client.js panel talks to local settings server', clientSrc.includes('127.0.0.1:8765') && clientSrc.includes('/api/config') && clientSrc.includes('/api/health') && clientSrc.includes('/api/login/open') && clientSrc.includes('/api/login/refresh'));
+  check('client.js refresh button probes login before reloading', clientSrc.includes('refreshStatus') && clientSrc.includes("onClick: refreshStatus"));
   check('client.js panel has package toggles + health + login buttons', clientSrc.includes('togglePkg') && clientSrc.includes('一键体检') && clientSrc.includes('打开 Edge 登录抖音'));
   check('package.json client inject lists slots + locale + runtime', ['@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-runtime'].every((s) => (pkg.dsh?.client?.inject ?? []).includes(s)) && !pkg.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings-general'));
   check('settings server sends CORS for the panel fetch', fs.readFileSync(path.join(ROOT, 'settings', 'settings-server.mjs'), 'utf8').includes('Access-Control-Allow-Origin'));
+}
+
+// v0.4.1: “刷新状态”真去探登录；只认可见的登录按钮。
+{
+  const browserSrc = fs.readFileSync(path.join(ROOT, 'lib', 'browser.mjs'), 'utf8');
+  check('isLoggedIn only counts visible login buttons', browserSrc.includes(':visible') && browserSrc.includes('loginButton'));
+  check('browser exports refreshLoginStatus (probe + persist)', browserSrc.includes('export async function refreshLoginStatus'));
+  const { isLoggedIn } = await import('./lib/browser.mjs');
+  const fakePage = (visibleCount) => ({ locator: (sel) => ({ first: () => ({ count: async () => (String(sel).includes(':visible') ? visibleCount : 1) }) }) });
+  check('isLoggedIn ignores a hidden login button', (await isLoggedIn(fakePage(0))) === true);
+  check('isLoggedIn reports logged-out when a visible login button exists', (await isLoggedIn(fakePage(1))) === false);
+  const htmlSrc = fs.readFileSync(path.join(ROOT, 'settings', 'settings.html'), 'utf8');
+  check('settings page refresh button probes login before reloading', htmlSrc.includes('/api/login/refresh') && htmlSrc.includes('refreshLoginStatus'));
+  const pluginSrc = fs.readFileSync(path.join(ROOT, 'dsh-plugin.mjs'), 'utf8');
+  check('dy_login_status reuses refreshLoginStatus', pluginSrc.includes('refreshLoginStatus'));
 }
 
 // v0.3.4: settings server auto-starts when the plugin loads.
@@ -682,6 +699,12 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
       check('settings server GET /api/allowed reads back the save', allowedBack.allowed?.[0]?.id === 'conv-1' && allowedBack.allowed?.[0]?.interests?.[0] === '美食');
       const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/login/open either opens Edge or returns friendly missing-runtime error', loginOpen.ok === true || (loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install')), loginOpen.message ?? '');
+      const noTokenRefresh = await fetch(`${base}/api/login/refresh`, { method: 'POST' }).then((r) => r.json());
+      check('settings server POST /api/login/refresh without token is rejected (401)', noTokenRefresh.ok === false && noTokenRefresh.error === 'unauthorized');
+      const refresh = await fetch(`${base}/api/login/refresh`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
+      check('settings server POST /api/login/refresh without Edge returns a friendly error, not a crash', refresh.ok === false && typeof refresh.message === 'string' && refresh.message.length > 0, refresh.message ?? '');
+      const cfgAfterFailedRefresh = await fetch(`${base}/api/config`).then((r) => r.json());
+      check('failed login refresh does not overwrite the stored login state', cfgAfterFailedRefresh.login?.loggedIn === null || cfgAfterFailedRefresh.login?.loggedIn === undefined);
       const health = await fetch(`${base}/api/health`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/health returns 13 checks', Array.isArray(health.checks) && health.checks.length === 13 && typeof health.summary === 'string', health.summary ?? '');
       check('settings server health: edge-login returns a valid environment-dependent status', ['unknown', 'pass', 'fail'].includes(health.checks?.find((c) => c.id === 'edge-login')?.status));

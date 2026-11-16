@@ -535,7 +535,7 @@ function writeConfigToPage(c) {
   loginEl.className = login.loggedIn === true ? 'ok' : login.loggedIn === false ? 'bad' : 'warn';
   document.getElementById('loginBox').innerHTML = login.loggedIn === false
     ? '<p class="danger">❌ 抖音未登录：请点“重新扫码登录”，在 Edge 里扫码 / 过验证码。</p>'
-    : `<p class="muted">登录状态：${login.loggedIn === true ? '已登录' : '未检查（用 dy_login_status 查一次）'}${login.lastCheckedAt ? `，上次检查 ${login.lastCheckedAt}` : ''}</p>`;
+    : `<p class="muted">登录状态：${login.loggedIn === true ? '已登录' : '未检查（点“刷新列表”查一次）'}${login.lastCheckedAt ? `，上次检查 ${login.lastCheckedAt}` : ''}</p>`;
   // v0.4.0: 核心包顶上的登录节，和安全包里的登录状态是同一份数据。
   const coreLogin = document.getElementById('loginBoxCore');
   if (coreLogin) {
@@ -543,7 +543,7 @@ function writeConfigToPage(c) {
       ? '<p class="danger">❌ 抖音未登录：点下面“打开 Edge 登录抖音”，在 Edge 里扫码 / 过验证码。</p>'
       : login.loggedIn === true
         ? `<p class="muted">✅ 已登录${login.lastCheckedAt ? `，上次检查 ${login.lastCheckedAt}` : ''}。可以刷了。</p>`
-        : '<p class="muted">❓ 未检查：点下面按钮打开 Edge 登录，或用 dy_login_status 查一次。</p>';
+        : '<p class="muted">❓ 未检查：点“刷新列表”查一次，或点下面按钮打开 Edge 登录。</p>';
   }
   const risk = c.risk || {};
   const riskEl = document.getElementById('cardRisk');
@@ -639,7 +639,15 @@ async function save() {
   await load();
 }
 
-document.getElementById('refreshBtn').addEventListener('click', load);
+document.getElementById('refreshBtn').addEventListener('click', async () => { await refreshLoginStatus(); await load(); });
+async function refreshLoginStatus() {
+  // v0.4.1: “刷新列表”先真去 Edge 里探一次登录并存下来，再读状态；
+  // 以前只重读 config.json 里的旧值，登上后刷不回已登录。
+  setStatus('正在重新探测登录状态…');
+  const r = await postJson('/api/login/refresh', {}).catch(() => ({ ok: false, message: '接口没通' }));
+  if (r.ok) setStatus(r.loggedIn ? '✅ 抖音已登录。' : '❌ 抖音未登录：点“打开 Edge 登录抖音”，在 Edge 里扫码。');
+  else setStatus(`登录探测没跑起来：${r.message || ''}，显示的是上次的结果。`);
+}
 document.getElementById('saveBtn').addEventListener('click', save);
 document.getElementById('aurabotBridgeTestBtn')?.addEventListener('click', async () => {
   const out = document.getElementById('aurabotBridgeTestResult');
