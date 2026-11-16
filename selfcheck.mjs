@@ -47,6 +47,15 @@ const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stra
   'dy_post', 'dy_publish_draft', 'dy_comfyui_latest',
   'dy_patrol', 'dy_login_status', 'dy_cleanup', 'dy_memory', 'dy_risk_status', 'dy_analyze_video', 'dy_fish_share'];
 check('36 tools defined', entry.TOOL_DEFINITIONS?.length === 36, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
+check('tool names are unique', new Set(entry.TOOL_DEFINITIONS.map((t) => t.name)).size === entry.TOOL_DEFINITIONS.length);
+check('Aurabot DM reply requires stable eventId', (() => {
+  const t = entry.TOOL_DEFINITIONS.find((x) => x.name === 'dy_aurabot_reply');
+  return t?.write === true && ['eventId', 'conversationId', 'senderId', 'message'].every((k) => t.parameters.required.includes(k));
+})());
+check('Aurabot proactive send requires eventId and is write-gated', (() => {
+  const t = entry.TOOL_DEFINITIONS.find((x) => x.name === 'dy_aurabot_proactive');
+  return t?.write === true && ['eventId', 'conversationId', 'recipientName', 'goal'].every((k) => t.parameters.required.includes(k));
+})());
 for (const want of ALL_TOOLS) check(`tool ${want} exists`, entry.TOOL_DEFINITIONS.some((t) => t.name === want));
 for (const [tool, pkgName] of [['dy_like', 'interact'], ['dy_hot', 'discover'], ['dy_post', 'publish'], ['dy_patrol', 'safety'], ['dy_watch', 'core']]) {
   check(`tool ${tool} gated by package ${pkgName}`, entry.TOOL_DEFINITIONS.find((t) => t.name === tool)?.pkg === pkgName);
