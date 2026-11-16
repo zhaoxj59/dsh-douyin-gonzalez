@@ -681,7 +681,7 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
       const allowedBack = await fetch(`${base}/api/allowed`).then((r) => r.json());
       check('settings server GET /api/allowed reads back the save', allowedBack.allowed?.[0]?.id === 'conv-1' && allowedBack.allowed?.[0]?.interests?.[0] === '美食');
       const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
-      check('settings server POST /api/login/open either opens Edge or returns friendly missing-runtime error', loginOpen.opened === true || (loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install')), loginOpen.message ?? '');
+      check('settings server POST /api/login/open either opens Edge or returns friendly missing-runtime error', loginOpen.ok === true || (loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install')), loginOpen.message ?? '');
       const health = await fetch(`${base}/api/health`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/health returns 13 checks', Array.isArray(health.checks) && health.checks.length === 13 && typeof health.summary === 'string', health.summary ?? '');
       check('settings server health: edge-login returns a valid environment-dependent status', ['unknown', 'pass', 'fail'].includes(health.checks?.find((c) => c.id === 'edge-login')?.status));
