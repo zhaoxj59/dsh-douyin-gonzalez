@@ -269,6 +269,42 @@ v0.3.2 的面板挂接用错了 API（调了 DSH 里不存在的方法），所�
 3. **预算总闸**：把点赞 10 + 评论 3 + 分享 3 全打开，合计 16 没超总闸 20，体检预算项应通过；再把收藏 5 也打开，合计 21 超了，体检应报不通过并列出分项。
 4. **吸顶目录条**：设置页往下翻到点赞那块，顶上的目录条应一直看得见，点“安全包”应跳到安全包。
 
+## Aurabot 私信 API 桥接（v0.4.0 开发分支）
+
+DSH 仍是独立抖音插件；Aurabot 只作为 AI 回复服务，不迁移 DSH，也不替 DSH 操作浏览器。
+
+### 当前已加入的桥接组件
+
+- DSH API 客户端：`lib/aurabot-bridge.mjs`
+- Aurabot 用户模块样例：`integrations/aurabot-module/douyin-bridge/index.mjs`
+- DSH 工具：`dy_aurabot_status`、`dy_aurabot_reply`、`dy_aurabot_proactive`
+- DSH 设置页：桥接开关、Aurabot 服务 Origin、共享密钥、自动回复和主动联系开关。
+- Aurabot 通过 `api.think()` 使用现有人格与记忆生成回复；只有 DSH 执行抖音消息发送。
+
+### 安装 Aurabot 模块
+
+将 `integrations/aurabot-module/douyin-bridge/` 整个目录复制到：
+
+```text
+%USERPROFILE%\\.dsh\\plugins-data\\aurabot\\modules\\douyin-bridge\\
+```
+
+在 Aurabot「模块」页面启用模块，并设置桥接密钥。DSH 设置页中的密钥必须完全一致。
+
+### API 地址
+
+Aurabot 路由由 DSH Web Server 注册，路径为：
+
+- `/aurabot/api/ext/douyin-bridge/health`
+- `/aurabot/api/ext/douyin-bridge/message`
+- `/aurabot/api/ext/douyin-bridge/proactive`
+
+DSH 设置里的服务地址只填 DSH Web Server 的 Origin（协议 + 主机 + 端口），不要填本地设置页 `127.0.0.1:8765`。本机 HTTP 可用；跨机器访问必须 HTTPS。具体端口以当前 DSH Web 面板实际地址为准，不在代码里猜测。
+
+### 当前阶段边界
+
+此提交完成 API 客户端、Aurabot 用户模块、DSH 手动工具调用和设置入口。**抖音私信列表目前只能读取会话列表，现有浏览器层尚未实现可靠的未读消息正文/发送者识别与后台轮询**，因此不能把这一步误称为“收到私信就自动回复已完成”。自动收件箱轮询、事件去重与实机 DOM 验证是下一阶段；未验证前不会伪造收到消息或发送成功。
+
 ## AstrBot 互通（v0.2.0，第 7 项，v0.3.0 不变）
 
 默认关闭，不装 AstrBot 也完全不影响本插件。
