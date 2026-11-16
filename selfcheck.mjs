@@ -789,5 +789,41 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   check('IM inspector redacts raw message content and IDs', browser.includes('hasDataId: Boolean') && browser.includes("privacy: '未导出昵称、消息正文、Cookie 或原始会话 ID。'"));
 }
 
+// Contact opt-out is durable and has priority over the allowlist.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-optout-'));
+  const { saveAllowed, blockContact, isBlocked, canReply } = await import('./lib/store.mjs');
+  const { detectContactOptOut, handleContactOptOut } = await import('./lib/dm.mjs');
+  saveAllowed(tmp, [{ id: 'conv-optout', name: 'Contact', kind: 'dm' }]);
+  check('explicit opt-out wording is detected', detectContactOptOut('请不要再联系我，也不要再发私信。'));
+  const blocked = handleContactOptOut(tmp, { conversationId: 'conv-optout', text: '别联系我' });
+  check('opt-out is persisted as a blocklist entry', blocked?.blocked === true && isBlocked(tmp, 'conv-optout'));
+  const gate = canReply(tmp, 'conv-optout');
+  check('blocklist overrides allowlist permission', gate.ok === false && gate.reason === 'contact-blocked');
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// Aurabot must not generate or send a reply after a clear opt-out.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-optout-bridge-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret' } });
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  try {
+    globalThis.fetch = async () => { called = true; throw new Error('must not call Aurabot after opt-out'); };
+    const result = await replyWithAurabot(tmp, (await import('./lib/config.mjs')).loadConfig(tmp), {
+      eventId: 'optout-event', conversationId: 'conv-stop', text: '请不要再联系我',
+    });
+    const { isBlocked } = await import('./lib/store.mjs');
+    check('opt-out stops before Aurabot API call', result.error === 'contact-opted-out' && called === false);
+    check('opt-out remains blocked after restart-safe persistence', isBlocked(tmp, 'conv-stop'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 console.log(failures === 0 ? '\nAll self-checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
