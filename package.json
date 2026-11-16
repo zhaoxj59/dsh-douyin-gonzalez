@@ -33,6 +33,7 @@
     "client.js",
     "cordis.bundle.yml",
     "lib/",
+    "integrations/",
     "settings/",
     "README.md"
   ],
