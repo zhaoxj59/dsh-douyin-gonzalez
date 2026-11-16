@@ -116,6 +116,15 @@ check('settings server has /api/cleanup', serverSrc.includes('/api/cleanup'));
 check('settings server has /api/memory', serverSrc.includes('/api/memory'));
 check('settings server has /api/health', serverSrc.includes('/api/health'));
 
+// v0.4.0 commercial filter skips explicit ads / purchase CTAs but keeps reviews.
+{
+  const { classifyCommercialCaption } = await import('./lib/content-filter.mjs');
+  check('commercial filter skips explicit brand sponsorship', classifyCommercialCaption('本视频为品牌合作内容').skip === true);
+  check('commercial filter skips shopping CTA', classifyCommercialCaption('点击购买，进店领券马上下单').skip === true);
+  check('commercial filter preserves non-sponsored unboxing review', classifyCommercialCaption('真实体验：这款耳机开箱测评，优缺点都说说').skip === false);
+  check('commercial filter does not treat product mention alone as ad', classifyCommercialCaption('今天分享一下我用的相机').skip === false);
+}
+
 // v0.4.0 combined outward-action budget is enforced from successful logs.
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-outward-'));
