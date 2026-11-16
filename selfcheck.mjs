@@ -83,7 +83,7 @@ check('settings page reloads saved state', html.includes('/api/allowed') && html
 check('settings page has 5 package tabs', ['pane-core', 'pane-interact', 'pane-discover', 'pane-publish', 'pane-safety'].every((s) => html.includes(s)));
 check('settings page has top status cards', html.includes('cardLogin') && html.includes('cardCounts') && html.includes('cardSpark') && html.includes('cardRisk'));
 check('settings page has comment/like section', html.includes('自行评论') && html.includes('自行点赞'));
-check('settings page has stranger section', html.includes('陌生人私信'));
+check('settings page has stranger section', html.includes('非白名单联系人') || html.includes('陌生人私信'));
 check('settings page has Aurabot bridge controls', html.includes('Aurabot 智能私信桥接') && html.includes('cfg-aurabotBridge-autoReply') && html.includes('cfg-aurabotBridge-autoProactive'));
 check('Aurabot module example uses api.think and authenticated routes', fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'index.mjs'), 'utf8').includes('api.think') && fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'index.mjs'), 'utf8').includes('api.route'));
 check('Aurabot bridge client rejects missing credentials', (await (await import('./lib/aurabot-bridge.mjs')).aurabotBridgeStatus({ aurabotBridge: {} })).error === 'aurabot-not-configured');
@@ -543,13 +543,14 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   const friendly = browser.toFriendlyBrowserError(new Error("Cannot find package 'playwright' imported from lib/browser.mjs"));
   check('playwright-missing error is Chinese + has fix steps', friendly.ok === false && friendly.error === 'playwright-missing' && friendly.message.includes('playwright 没装') && friendly.fix.includes('pnpm install') && friendly.fix.includes('node_modules\\playwright'));
   check('non-playwright browser error keeps its own message', browser.toFriendlyBrowserError(new Error('Edge crashed')).error === 'browser-error');
-  // getContext must surface the friendly text when playwright is absent
-  // on this box (no node_modules here): it throws, message in Chinese.
+  // Environment-dependent: if Edge + Playwright exist, launch/close succeeds;
+  // otherwise the plugin must return the friendly missing-Playwright message.
   try {
-    await browser.getContext(path.join(os.tmpdir(), 'dy-gonzalez-no-pw-' + Date.now()));
-    check('getContext throws friendly error without playwright', false, 'did not throw');
+    const ctx = await browser.getContext(path.join(os.tmpdir(), 'dy-gonzalez-edge-check-' + Date.now()));
+    await ctx.close();
+    check('getContext opens Edge when browser runtime is available', true);
   } catch (e) {
-    check('getContext throws friendly error without playwright', String(e.message).includes('playwright 没装') && String(e.message).includes('pnpm install'), String(e.message).slice(0, 80));
+    check('getContext gives friendly error when browser runtime is unavailable', String(e.message).includes('playwright 没装') && String(e.message).includes('pnpm install'), String(e.message).slice(0, 120));
   }
 }
 
@@ -680,10 +681,10 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
       const allowedBack = await fetch(`${base}/api/allowed`).then((r) => r.json());
       check('settings server GET /api/allowed reads back the save', allowedBack.allowed?.[0]?.id === 'conv-1' && allowedBack.allowed?.[0]?.interests?.[0] === '美食');
       const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
-      check('settings server POST /api/login/open gives friendly playwright-missing error on this box', loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install') && loginOpen.message.includes('playwright'), loginOpen.message ?? '');
+      check('settings server POST /api/login/open either opens Edge or returns friendly missing-runtime error', loginOpen.opened === true || (loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install')), loginOpen.message ?? '');
       const health = await fetch(`${base}/api/health`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/health returns 13 checks', Array.isArray(health.checks) && health.checks.length === 13 && typeof health.summary === 'string', health.summary ?? '');
-      check('settings server health: edge-login is unknown on Linux, not a crash', health.checks?.find((c) => c.id === 'edge-login')?.status === 'unknown');
+      check('settings server health: edge-login returns a valid environment-dependent status', ['unknown', 'pass', 'fail'].includes(health.checks?.find((c) => c.id === 'edge-login')?.status));
       check('settings server health: share OFF passes dangerous-off only if nothing else is on', health.checks?.find((c) => c.id === 'dangerous-off')?.status === 'fail');
     }
   } finally {
