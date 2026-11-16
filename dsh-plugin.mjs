@@ -7,10 +7,12 @@
 // v0.3.1: share defaults OFF (config v4 migration), dy_health_check added.
 // v0.3.2: friendly playwright-missing error, dy_fish_share, login on the
 // first page, auto-save, DSH native panel section.
+import { randomUUID } from 'node:crypto';
 import { dataPaths } from './lib/paths.mjs';
 import { loadAllowed, canDoAction, alreadyActedOnVideo, logAction, rotationGate } from './lib/store.mjs';
 import { loadConfig, packageGate } from './lib/config.mjs';
 import { outwardBudgetGate } from './lib/outward-gate.mjs';
+import { aurabotBridgeStatus, generateAurabotReply, generateAurabotProactive } from './lib/aurabot-bridge.mjs';
 
 export const name = 'douyin-gonzalez';
 export const inject = ['tools'];
@@ -22,6 +24,9 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_list_chats', pkg: 'core', description: '读取抖音私信会话列表，写入本地 chats.json（好友互动页的勾选来源）。', parameters: { type: 'object', properties: {} }, execute: 'listChats' },
   { name: 'dy_dm_reply', pkg: 'core', description: '给一个已许可会话回一条私信。只回 allowed.json 里勾选过的会话；每人每天上限、全天上限按 config.json；发送结果不明时不自动重发。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReply' },
   { name: 'dy_dm_reply_stranger', pkg: 'core', description: '给一个陌生人回一条私信。只有在设置页显式打开“陌生人私信回复”开关时才可用，有独立的每日上限（默认 3 条），和白名单回复分开计数。默认关闭。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReplyStranger' },
+  { name: 'dy_aurabot_status', pkg: 'core', description: '检查 DSH 到 Aurabot 的 API 连接状态；不会暴露桥接密钥。', parameters: { type: 'object', properties: {} }, execute: 'aurabotStatus' },
+  { name: 'dy_aurabot_reply', pkg: 'core', description: '把一条抖音私信交给 Aurabot，使用它的人格和记忆生成回复，并由 DSH 自动发送；需要开启 Aurabot 桥接与自动回复。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, senderId: { type: 'string' }, senderName: { type: 'string' }, message: { type: 'string' }, recentMessages: { type: 'array', items: { type: 'string' } }, eventId: { type: 'string' } }, required: ['conversationId', 'senderId', 'message'] }, execute: 'aurabotReply' },
+  { name: 'dy_aurabot_proactive', pkg: 'core', description: '让 Aurabot 为指定抖音联系人生成主动私信，并由 DSH 自动发送；需要开启主动联系开关，联系人权限和每日额度仍然生效。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, recipientName: { type: 'string' }, goal: { type: 'string' }, context: { type: 'string' } }, required: ['conversationId', 'recipientName', 'goal'] }, execute: 'aurabotProactive' },
   { name: 'dy_daily_report', pkg: 'core', description: '从本地观看/回复/点赞/评论/分享/发视频记录生成当天的 Markdown 日报，不额外调模型。', parameters: { type: 'object', properties: { date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' } } }, execute: 'dailyReport' },
   { name: 'dy_astrbot_status', pkg: 'core', description: '查看 AstrBot 桥的状态（是否开启、端口、今日计数）。桥默认关闭，开启也只监听 127.0.0.1 + token。', parameters: { type: 'object', properties: {} }, execute: 'astrbotStatus' },
   { name: 'dy_health_check', pkg: 'core', description: '一键体检：真跑 13 项检查（Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控、大肥鱼记忆互通），返回通过几项、不通过哪几项，每项不通过都写原因。只读本地状态，不改任何文件；Edge 探不到时那项报 unknown，不假装通过。', parameters: { type: 'object', properties: {} }, execute: 'healthCheck' },
@@ -103,6 +108,40 @@ async function runTool(toolName, args, dataDir) {
       if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply_stranger 需要 conversationId 和非空的 text。' };
       const { replyToStranger } = await import('./lib/dm.mjs');
       return replyToStranger(dir, { conversationId: args.conversationId, text: args.text });
+    }
+    case 'dy_aurabot_status': {
+      return { ok: true, configured: Boolean(config.aurabotBridge?.baseUrl && config.aurabotBridge?.token), enabled: Boolean(config.aurabotBridge?.enabled), autoReply: Boolean(config.aurabotBridge?.autoReply), autoProactive: Boolean(config.aurabotBridge?.autoProactive), ...(await aurabotBridgeStatus(config)) };
+    }
+    case 'dy_aurabot_reply': {
+      if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoReply) return { ok: false, error: 'aurabot-auto-reply-disabled', message: '请先在设置页启用 Aurabot 桥接和自动回复。' };
+      if (!args?.conversationId || !args?.senderId || !String(args?.message ?? '').trim()) return { ok: false, error: 'missing-args', message: '需要 conversationId、senderId 和 message。' };
+      const ai = await generateAurabotReply(config, {
+        event_id: String(args.eventId || randomUUID()),
+        conversation_id: String(args.conversationId),
+        sender_id: String(args.senderId),
+        sender_name: String(args.senderName ?? ''),
+        message: String(args.message).slice(0, 4000),
+        recent_messages: Array.isArray(args.recentMessages) ? args.recentMessages.slice(-12).map((x) => String(x).slice(0, 1000)) : [],
+      });
+      if (!ai.ok || !String(ai.reply_text ?? '').trim()) return { ok: false, error: ai.error ?? 'aurabot-no-reply', message: ai.message ?? 'Aurabot 未生成回复。' };
+      const { replyTo, replyToStranger } = await import('./lib/dm.mjs');
+      let sent = await replyTo(dir, { conversationId: args.conversationId, text: ai.reply_text });
+      if (!sent.ok && sent.reason === 'not-allowed' && config.strangerReply?.enabled) {
+        sent = await replyToStranger(dir, { conversationId: args.conversationId, text: ai.reply_text });
+      }
+      return { ...sent, source: 'aurabot', replyText: ai.reply_text };
+    }
+    case 'dy_aurabot_proactive': {
+      if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoProactive) return { ok: false, error: 'aurabot-proactive-disabled', message: '请先在设置页启用 Aurabot 主动联系。' };
+      if (!args?.conversationId || !args?.recipientName || !args?.goal) return { ok: false, error: 'missing-args', message: '需要 conversationId、recipientName 和 goal。' };
+      const ai = await generateAurabotProactive(config, { conversation_id: String(args.conversationId), recipient_name: String(args.recipientName), goal: String(args.goal), context: String(args.context ?? '').slice(0, 2000) });
+      if (!ai.ok || !String(ai.message_text ?? '').trim()) return { ok: false, error: ai.error ?? 'aurabot-no-message', message: ai.message ?? 'Aurabot 未生成主动私信。' };
+      const { replyTo, replyToStranger } = await import('./lib/dm.mjs');
+      let sent = await replyTo(dir, { conversationId: args.conversationId, text: ai.message_text });
+      if (!sent.ok && sent.reason === 'not-allowed' && config.strangerReply?.enabled) {
+        sent = await replyToStranger(dir, { conversationId: args.conversationId, text: ai.message_text });
+      }
+      return { ...sent, source: 'aurabot-proactive', messageText: ai.message_text };
     }
     case 'dy_like':
     case 'dy_comment':
