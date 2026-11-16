@@ -150,11 +150,11 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 ### 办法一：GitHub clone（现在就能在线装）
 
 ```powershell
-git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git C:\dsh-douyin-gonzalez
-cd C:\dsh-douyin-gonzalez
-pnpm install
-node selfcheck.mjs
-dsh plugin --profile web add link:C:\dsh-douyin-gonzalez
+git clone -b release/v0.4.0-douyin-enhanced --single-branch https://github.com/zhaoxj59/dsh-douyin-gonzalez.git C:\dsh-douyin-gonzalez-v040
+cd C:\dsh-douyin-gonzalez-v040
+npm install
+npm test
+dsh plugin --profile web add link:C:\dsh-douyin-gonzalez-v040
 ```
 
 更新：进入该目录执行 `git pull origin release/v0.4.0-douyin-enhanced`，再运行 `npm install` 和 `npm test`。此版本与旧版插件同名，切换前请先备份旧插件目录；不要删除 DSH 的插件数据目录。
@@ -164,7 +164,7 @@ dsh plugin --profile web add link:C:\dsh-douyin-gonzalez
 代码已按 npm 发布要求准备好（name/version/files/engines/license/repository/homepage/bugs 齐全），但**还没发布到 npm**：发布要用户自己的 npm 账号登录一次、跑 `npm publish`，没有用户的 npm 账号/Token，这一步做不了。发布后安装命令会是：
 
 ```powershell
-dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4
+dsh plugin --profile web add dsh-douyin-gonzalez@0.4.0
 ```
 
 等 DSH 市场收录后，也可以直接在市场里搜 `dsh-douyin-gonzalez` 安装——同样还没收录，别去搜了，搜不到。
@@ -174,8 +174,8 @@ dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4
 ```powershell
 cd C:\dsh-douyin-gonzalez
 git tag v0.4.0
- git push origin v0.4.0
- gh release create v0.4.0 --title "v0.4.0" --notes "互动总额度强制拦截、商业内容过滤、平台挑战熔断"
+git push origin v0.4.0
+gh release create v0.4.0 --title "v0.4.0" --notes "互动总额度强制拦截、商业内容过滤、平台挑战熔断"
 ```
 
 ### 本地自检
