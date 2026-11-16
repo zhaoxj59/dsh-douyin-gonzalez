@@ -720,5 +720,17 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   }
 }
 
+// Aurabot DM idempotency: sent or uncertain event IDs are never sent twice.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-dm-event-'));
+  const { logReply } = await import('./lib/store.mjs');
+  const { hasProcessedDmEvent } = await import('./lib/dm.mjs');
+  check('unseen DM event is eligible', hasProcessedDmEvent(tmp, 'event-1') === false);
+  logReply(tmp, { eventId: 'event-1', conversationId: 'conv-1', status: 'uncertain' });
+  check('uncertain DM event is deduplicated to avoid double-send', hasProcessedDmEvent(tmp, 'event-1') === true);
+  check('different DM event remains eligible', hasProcessedDmEvent(tmp, 'event-2') === false);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
 console.log(failures === 0 ? '\nAll self-checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
