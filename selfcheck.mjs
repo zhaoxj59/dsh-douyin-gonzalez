@@ -825,5 +825,18 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   }
 }
 
+// Both documented Aurabot module install paths must remain identical and
+// syntactically valid; this catches API drift between the source and copyable folder.
+{
+  const { spawnSync } = await import('node:child_process');
+  const source = fs.readFileSync(path.join(ROOT, 'integrations/aurabot-module/index.mjs'), 'utf8');
+  const installable = fs.readFileSync(path.join(ROOT, 'integrations/aurabot-module/douyin-bridge/index.mjs'), 'utf8');
+  check('Aurabot source module and installable module folder stay in sync', source === installable);
+  for (const file of ['integrations/aurabot-module/index.mjs', 'integrations/aurabot-module/douyin-bridge/index.mjs']) {
+    const result = spawnSync(process.execPath, ['--check', path.join(ROOT, file)], { encoding: 'utf8' });
+    check('Aurabot module syntax: ' + file, result.status === 0, result.stderr || '');
+  }
+}
+
 console.log(failures === 0 ? '\nAll self-checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
