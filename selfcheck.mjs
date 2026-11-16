@@ -839,5 +839,14 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   }
 }
 
+// The installable Aurabot module folder must ship a module manifest, the same
+// way the douyin-plus module does; without it Aurabot has no id/version to list.
+{
+  let meta = null;
+  try { meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'module.json'), 'utf8')); } catch { meta = null; }
+  check('Aurabot bridge module.json parses', meta !== null);
+  check('Aurabot bridge module.json id/version match the module', meta?.id === 'douyin-bridge' && meta?.version === '0.1.0' && meta?.api === 1);
+}
+
 console.log(failures === 0 ? '\nAll self-checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

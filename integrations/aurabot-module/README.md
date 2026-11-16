@@ -22,11 +22,15 @@ Aurabot 扩展路由的真实前缀来自模块 API 文档：`/aurabot/api/ext/<
 
 ## 安装
 
-将 `integrations/aurabot-module/douyin-bridge/` 整个目录复制到：
+一键安装（推荐）：解压整合包后，右键包根目录的 `install-all.ps1`，用 PowerShell 运行。它会先备份，再一次装好 DSH 插件和这个 Aurabot 桥接模块。装完按 `安装说明-整合版.md` 配两把密钥、点一次“测试 Aurabot 连接”就行。
+
+手动安装：将 `integrations/aurabot-module/douyin-bridge/` 整个目录复制到：
 
 ```text
 %USERPROFILE%\\.dsh\\plugins-data\\aurabot\\modules\\douyin-bridge\\
 ```
+
+目录里现在有 `index.mjs`（桥接本体）和 `module.json`（模块清单，Aurabot 靠它认出这个模块），缺了清单模块可能列不出来，别只拷一个文件。
 
 在 Aurabot「已安装」页启用模块，并配置：
 

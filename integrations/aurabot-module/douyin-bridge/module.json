@@ -1,0 +1,1 @@
+{"api":1,"author":"gonzalez","capabilities":["network","plugin-config"],"category":"platform","description":"DSH 独立抖音插件与 Aurabot 之间的 API 桥接；Aurabot 负责理解和回复，DSH 负责权限与发送。","homepage":"https://github.com/zhaoxj59/dsh-douyin-gonzalez","id":"douyin-bridge","license":"MIT","minPluginVersion":"1.2.0","name":"抖音私信桥接（DSH）","requires":[],"tags":["抖音","私信","桥接"],"version":"0.1.0"}
