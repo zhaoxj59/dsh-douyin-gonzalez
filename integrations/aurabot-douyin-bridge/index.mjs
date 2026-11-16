@@ -43,6 +43,7 @@ export default {
     const logger = api.log;
     const historyFile = path.join(api.dataDir(), 'douyin-conversations.json');
     const eventsFile = path.join(api.dataDir(), 'processed-events.json');
+    const inFlight = new Map();
     const read = (file, fallback) => {
       try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
     };
@@ -120,13 +121,24 @@ export default {
         if (task === 'message' && !eventId) return json(api, res, 400, { ok: false, error: 'event_id-required' });
         const events = read(eventsFile, {});
         if (eventId && events[eventId]) return json(api, res, 200, { ok: true, duplicate: true, should_send: false, reason: 'duplicate-event' });
-        const result = await think({ ...input, task });
-        if (eventId) {
-          events[eventId] = result;
-          const keys = Object.keys(events);
-          for (const key of keys.slice(0, Math.max(0, keys.length - 1000))) delete events[key];
-          write(eventsFile, events);
+        if (eventId && inFlight.has(eventId)) {
+          await inFlight.get(eventId);
+          return json(api, res, 200, { ok: true, duplicate: true, should_send: false, reason: 'duplicate-in-flight' });
         }
+        const work = (async () => {
+          const result = await think({ ...input, task });
+          if (eventId) {
+            const latest = read(eventsFile, {});
+            latest[eventId] = result;
+            const keys = Object.keys(latest);
+            for (const key of keys.slice(0, Math.max(0, keys.length - 1000))) delete latest[key];
+            write(eventsFile, latest);
+          }
+          return result;
+        })();
+        if (eventId) inFlight.set(eventId, work);
+        let result;
+        try { result = await work; } finally { if (eventId) inFlight.delete(eventId); }
         logger.info('处理抖音桥接请求：', task, input.conversation_id || input.sender_id || 'unknown');
         return json(api, res, 200, { ok: true, ...result });
       } catch (error) {
