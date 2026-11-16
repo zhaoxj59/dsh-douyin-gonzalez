@@ -1,5 +1,5 @@
 // Self-check v0.4.0 (no DSH, no Douyin login, no network needed).
-// Verifies: manifest + patch + entry exports, the 33 tools in 5 packages,
+// Verifies: manifest + patch + entry exports, the 36 tools in 5 packages,
 // settings page (5 tabs + top status cards + all new sections),
 // config v4 defaults + round-trip + v2/v3 migration, allowed.json v2,
 // stranger gate, caps, rotation, whitelist sharing, post/draft gates,
@@ -41,16 +41,23 @@ const entry = await import('./dsh-plugin.mjs');
 check('entry exports name', entry.name === 'douyin-gonzalez', entry.name);
 check('entry inject includes tools', Array.isArray(entry.inject) && entry.inject.includes('tools'));
 check('entry exports apply()', typeof entry.apply === 'function');
-const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
+const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_dm_ai_reply', 'dy_dm_ai_proactive', 'dy_aurabot_status', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
   'dy_like', 'dy_comment', 'dy_comment_mention', 'dy_share', 'dy_favorite', 'dy_sticker', 'dy_collect_sticker', 'dy_spark', 'dy_reply_own_comments',
   'dy_hot', 'dy_search', 'dy_following', 'dy_creator_videos', 'dy_diagnose_creator', 'dy_my_posts', 'dy_watch_sources',
   'dy_post', 'dy_publish_draft', 'dy_comfyui_latest',
   'dy_patrol', 'dy_login_status', 'dy_cleanup', 'dy_memory', 'dy_risk_status', 'dy_analyze_video', 'dy_fish_share'];
-check('33 tools defined', entry.TOOL_DEFINITIONS?.length === 33, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
+check('36 tools defined', entry.TOOL_DEFINITIONS?.length === 36, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
 for (const want of ALL_TOOLS) check(`tool ${want} exists`, entry.TOOL_DEFINITIONS.some((t) => t.name === want));
 for (const [tool, pkgName] of [['dy_like', 'interact'], ['dy_hot', 'discover'], ['dy_post', 'publish'], ['dy_patrol', 'safety'], ['dy_watch', 'core']]) {
   check(`tool ${tool} gated by package ${pkgName}`, entry.TOOL_DEFINITIONS.find((t) => t.name === tool)?.pkg === pkgName);
 }
+check('Aurabot AI reply tool requires conversation and message', (() => {
+  const t = entry.TOOL_DEFINITIONS.find((x) => x.name === 'dy_dm_ai_reply');
+  return ['conversationId', 'senderId', 'message'].every((k) => t?.parameters?.required?.includes(k));
+})());
+check('Aurabot proactive tool is write-gated', entry.TOOL_DEFINITIONS.find((x) => x.name === 'dy_dm_ai_proactive')?.write === true);
+check('Aurabot bridge module is included in package files', pkg.files?.includes('integrations/'));
+check('Aurabot bridge module exposes token-protected routes', fs.existsSync(path.join(ROOT, 'integrations/aurabot-douyin-bridge/index.mjs')) && fs.readFileSync(path.join(ROOT, 'integrations/aurabot-douyin-bridge/index.mjs'), 'utf8').includes("api.route('/message'"));
 check('dy_dm_reply requires conversationId+text', (() => {
   const t = entry.TOOL_DEFINITIONS.find((x) => x.name === 'dy_dm_reply');
   return Array.isArray(t?.parameters?.required) && t.parameters.required.includes('conversationId') && t.parameters.required.includes('text');
