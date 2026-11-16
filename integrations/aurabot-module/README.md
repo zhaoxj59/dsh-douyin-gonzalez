@@ -1,44 +1,49 @@
-# DSH ↔ Aurabot 私信桥接（实验性）
+# DSH ↔ Aurabot 私信桥接（预发布）
 
-DSH 保持独立插件；Aurabot 通过独立用户模块提供人格化回复。两个项目不合并。
+DSH 保持独立抖音插件；Aurabot 只通过自己的模块 API 提供模型、人格和记忆。两个项目不合并。
 
-## 已加入的代码
+## 当前组件
 
-- `lib/aurabot-bridge.mjs`：DSH 调用 Aurabot 的 API 客户端，支持健康检查、消息回复和主动消息生成。
-- `lib/aurabot-send.mjs`：DSH 侧发送适配，复用现有私信发送门控；主动发送事件使用持久化 eventId 去重。
-- `POST /api/aurabot/send`：本机设置服务的认证发送入口。
-- `GET /api/aurabot/contacts`：向经过本机 Token 认证的 Aurabot 模块返回 DSH 已授权联系人。
-- `integrations/aurabot-module/index.mjs`：Aurabot 用户模块样例，提供 `/health`、`/message`、`/proactive` API，并在主人私聊中提供联系人查询和发送工具。
+- `lib/aurabot-bridge.mjs`：DSH 调用 Aurabot 的模块 API。
+- `lib/aurabot-send.mjs`：DSH 侧回复/主动发送适配，复用 DSH 联系人许可、每日额度、事件去重和拒绝联系黑名单。
+- `POST /api/aurabot/send`：经过 DSH 本机设置 Token 认证的主动发送入口。
+- `GET /api/aurabot/contacts`：向 Aurabot 模块提供 DSH 已授权联系人。
+- `integrations/aurabot-module/douyin-bridge/index.mjs`：可直接复制安装的 Aurabot 用户模块。
 
-## 连接协议
+## API 协议
 
-Aurabot 扩展 API 基址为：
+Aurabot 扩展路由的真实前缀来自模块 API 文档：`/aurabot/api/ext/<module-id>/`。本模块 ID 为 `douyin-bridge`，所以地址为：
 
-`<Aurabot本机地址>/aurabot/api/ext/douyin-bridge`
+- `GET /aurabot/api/ext/douyin-bridge/health`
+- `POST /aurabot/api/ext/douyin-bridge/message`
+- `POST /aurabot/api/ext/douyin-bridge/proactive`
 
-- `GET /health`
-- `POST /message`：请求体含 `eventId`、`conversationId`、`senderName`、`text`、`recentMessages`，返回 `{ ok, replyText }`
-- `POST /proactive`：请求体含 `goal`、`senderName`、`context`，返回 `{ ok, replyText }`
+鉴权使用 `Authorization: Bearer <sharedSecret>`。远程 Aurabot 地址必须 HTTPS；HTTP 只允许本机回环。
 
-使用 `Authorization: Bearer <sharedSecret>`。远程 Aurabot 地址必须使用 HTTPS；HTTP 仅允许本机回环地址。
+## 安装
 
-## Aurabot 模块安装
+将 `integrations/aurabot-module/douyin-bridge/` 整个目录复制到：
 
-把 `integrations/aurabot-module/index.mjs` 复制到：
+```text
+%USERPROFILE%\\.dsh\\plugins-data\\aurabot\\modules\\douyin-bridge\\
+```
 
-`%USERPROFILE%\.dsh\plugins-data\aurabot\modules\douyin-bridge\index.mjs`
+在 Aurabot「已安装」页启用模块，并配置：
 
-在 Aurabot「已安装」页配置：
-- 启用桥接
-- 共享密钥
-- DSH 地址（默认 `http://127.0.0.1:8765`）
-- DSH 设置服务 Token（DSH 数据目录中的 `settings-token.txt`）
-- 是否允许主动私信
+- `sharedSecret`：与 DSH 设置页的 Aurabot 桥接密钥完全一致
+- `dshBaseUrl`：DSH 本机设置服务地址，默认 `http://127.0.0.1:8765`
+- `dshToken`：DSH 数据目录的 `settings-token.txt`
+- `allowProactive`：Aurabot 侧主动联系开关
 
-Aurabot 模块的主动发送工具仅在主人私聊且本轮发言者均为主人时可用；发送时 DSH 再次执行白名单、每日额度和 eventId 去重校验。
+在 DSH 设置页填写 Aurabot Web Server Origin（协议、主机、端口），启用桥接和需要的自动回复/主动联系开关，然后点“测试 Aurabot 连接”。连接测试只访问 health，不发送消息。
 
-## 当前尚未完成的部分
+## 安全行为
 
-DSH 浏览器当前实现能读取私信会话列表并向指定会话发送，但尚未实现经过实机验证的未读消息正文、消息唯一 ID 提取和持续监听。因此，虽然 API 和 AI 生成/发送适配器已加入，**不能宣称无人值守的自动收件回复已经完成**。下一步必须在用户当前抖音登录环境验证消息 DOM、未读状态和消息 ID，再实现可靠监听；不能凭空猜选择器。
+- Aurabot 使用 `api.think()`，沿用它自身的人格和记忆；DSH 负责抖音浏览器会话和发送。
+- Aurabot 主动私信工具仅主人私聊可用；DSH 仍会再次检查已授权联系人和每日额度。
+- 明确的“别联系我 / 不要再私信 / 停止联系”等拒绝联系语句会写入 DSH 本地 `blocked.json`，优先于白名单拒绝后续发送。
+- 对发送结果不确定的事件不自动重发；不绕过验证码或平台风控。
 
-此外，当前分支的 DSH 设置页尚未加入 Aurabot 图形化配置表单；桥接参数仍由现有配置结构承载。不要把这份实验集成当作稳定版。
+## 尚未完成
+
+**自动收件监听仍未完成。** 当前浏览器层只能读取会话列表和发送消息；尚未基于用户真实抖音登录页验证未读状态、消息正文、发送者和消息级稳定 ID，也没有持续轮询。DSH 新增的 `dy_dm_inspect` 只读工具可返回脱敏 DOM 结构（不包含昵称、消息正文、Cookie 和原始会话 ID），用于下一步按真实 DOM 实现监听。未经 Windows + Edge + 已登录抖音实机验收，不得把本分支当作稳定正式版。
