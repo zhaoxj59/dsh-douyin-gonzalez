@@ -187,6 +187,12 @@ const server = http.createServer((req, res) => {
     json(req, res, 200, readMemory());
     return;
   }
+  if (req.method === 'GET' && url.pathname === '/api/aurabot/contacts') {
+    if (!requireToken(req, res)) return;
+    const loaded = loadAllowed();
+    json(req, res, 200, { ok: true, allowed: loaded.allowed ?? [] });
+    return;
+  }
   if (req.method === 'POST' && url.pathname === '/api/aurabot/send') {
     if (!requireToken(req, res)) return;
     let body = '';
