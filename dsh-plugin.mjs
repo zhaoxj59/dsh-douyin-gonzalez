@@ -10,6 +10,7 @@
 import { dataPaths } from './lib/paths.mjs';
 import { loadAllowed, canDoAction, alreadyActedOnVideo, logAction, rotationGate } from './lib/store.mjs';
 import { loadConfig, packageGate } from './lib/config.mjs';
+import { outwardBudgetGate } from './lib/outward-gate.mjs';
 
 export const name = 'douyin-gonzalez';
 export const inject = ['tools'];
@@ -63,6 +64,11 @@ async function runTool(toolName, args, dataDir) {
   if (!def) return { ok: false, error: 'unknown-tool', message: `未知工具 ${toolName}` };
   const pkgGate = packageGate(config, def.pkg);
   if (!pkgGate.ok) return { ok: false, ...pkgGate };
+  const outwardBudgeted = new Set(['dy_like', 'dy_comment', 'dy_comment_mention', 'dy_share', 'dy_favorite', 'dy_sticker', 'dy_spark', 'dy_reply_own_comments']);
+  if (outwardBudgeted.has(toolName)) {
+    const budget = outwardBudgetGate(dir, config);
+    if (!budget.ok) return { ok: false, ...budget };
+  }
   if (def.write) {
     const { riskGate } = await import('./lib/safety.mjs');
     const rg = riskGate(dir, config);
@@ -141,6 +147,8 @@ async function runTool(toolName, args, dataDir) {
       const { shareCurrentVideoTo } = await import('./lib/browser.mjs');
       const results = [];
       for (const person of plan.recipients) {
+        const totalGate = outwardBudgetGate(dir, config);
+        if (!totalGate.ok) { results.push({ personId: person.id, ok: false, reason: totalGate.reason, message: totalGate.message }); break; }
         const gate = canDoAction(dir, 'share', { enabled: config.share.enabled, cap: config.caps.sharePerDay });
         if (!gate.ok) { results.push({ personId: person.id, ok: false, reason: gate.reason }); break; }
         results.push(await shareVideo(dir, video, person, (v, p) => shareCurrentVideoTo(dir, { videoId: v.videoId, personId: p.id, personName: p.name })));
@@ -188,6 +196,8 @@ async function runTool(toolName, args, dataDir) {
       if (!picked.ok) return { ok: false, ...picked };
       const results = [];
       for (const c of picked.picked) {
+        const totalGate = outwardBudgetGate(dir, config);
+        if (!totalGate.ok) { results.push({ commentId: c.id, sent: false, reason: totalGate.reason, message: totalGate.message }); break; }
         const res = await commentCurrentVideo(dir, { videoId: args.videoId ?? c.id, text: c.text ?? '' }).catch(() => ({ ok: false, uncertain: true }));
         if (res.sent) logAction(dir, { type: 'reply-own', status: 'sent', commentId: c.id, userId: c.userId });
         results.push({ commentId: c.id, sent: Boolean(res.sent) });
@@ -319,7 +329,7 @@ async function runTool(toolName, args, dataDir) {
 export async function apply(ctx, config = {}) {
   const dataDir = config.dataDir ?? process.env.DSH_DOUYIN_DATA_DIR;
   const paths = dataPaths(dataDir);
-  console.log(`[dsh-douyin-gonzalez] loaded v0.3.4. data dir: ${paths.dir}`);
+  console.log(`[dsh-douyin-gonzalez] loaded v0.4.0. data dir: ${paths.dir}`);
 
   let defineTool = null;
   try { ({ defineTool } = await import('@deepseek-ai/dsh-tools')); } catch { defineTool = null; }
