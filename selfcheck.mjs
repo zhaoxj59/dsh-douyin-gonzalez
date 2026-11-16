@@ -796,6 +796,7 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   const { detectContactOptOut, handleContactOptOut } = await import('./lib/dm.mjs');
   saveAllowed(tmp, [{ id: 'conv-optout', name: 'Contact', kind: 'dm' }]);
   check('explicit opt-out wording is detected', detectContactOptOut('请不要再联系我，也不要再发私信。'));
+  check('English opt-out wording is detected', detectContactOptOut('Please do not contact me again.'));
   const blocked = handleContactOptOut(tmp, { conversationId: 'conv-optout', text: '别联系我' });
   check('opt-out is persisted as a blocklist entry', blocked?.blocked === true && isBlocked(tmp, 'conv-optout'));
   const gate = canReply(tmp, 'conv-optout');
