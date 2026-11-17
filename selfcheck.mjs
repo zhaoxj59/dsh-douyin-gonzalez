@@ -812,7 +812,8 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   const browser = fs.readFileSync(path.join(ROOT, 'lib/browser.mjs'), 'utf8');
   check('dy_dm_inspect tool is registered', plugin.includes("name: 'dy_dm_inspect'") && plugin.includes("case 'dy_dm_inspect'"));
   check('browser exports the read-only IM DOM inspector', browser.includes('export async function inspectDmStructure'));
-  check('IM inspector redacts raw message content and IDs', browser.includes('hasDataId: Boolean') && browser.includes("privacy: '未导出昵称、消息正文、Cookie 或原始会话 ID。'"));
+  check('IM inspector redacts raw message content and IDs', browser.includes('hasMessageId: Boolean') && browser.includes('hasSenderId: Boolean') && browser.includes('privacy:'));
+  check('IM inspector preserves an already-open conversation', browser.includes('preservedOpenConversation') && browser.includes('current.pathname.startsWith(\'/im\')'));
 }
 
 // Contact opt-out is durable and has priority over the allowlist.
@@ -872,6 +873,59 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   try { meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'module.json'), 'utf8')); } catch { meta = null; }
   check('Aurabot bridge module.json parses', meta !== null);
   check('Aurabot bridge module.json id/version match the module', meta?.id === 'douyin-bridge' && meta?.version === '0.1.0' && meta?.api === 1);
+}
+
+
+// Aurabot must reject unauthorized incoming messages before sending their
+// contents to its model endpoint.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-aurabot-permission-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret' }, strangerReply: { enabled: false } });
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  try {
+    globalThis.fetch = async () => { called = true; throw new Error('unauthorized content must not reach Aurabot'); };
+    const result = await replyWithAurabot(tmp, (await import('./lib/config.mjs')).loadConfig(tmp), {
+      eventId: 'permission-event', conversationId: 'conv-not-allowed', text: 'private message',
+    });
+    check('unauthorized DM is rejected before model call', result.error === 'not-allowed' && called === false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// Concurrent duplicate deliveries of the same incoming event are serialized.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-aurabot-idempotency-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { saveAllowed } = await import('./lib/store.mjs');
+  const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret' } });
+  saveAllowed(tmp, [{ id: 'conv-allowed', name: 'Allowed', kind: 'dm' }]);
+  const originalFetch = globalThis.fetch;
+  let release;
+  try {
+    globalThis.fetch = async () => new Promise((resolve) => {
+      release = () => resolve(new Response(JSON.stringify({ ok: false, message: 'simulated model outage' }), {
+        status: 502, headers: { 'content-type': 'application/json' },
+      }));
+    });
+    const config = (await import('./lib/config.mjs')).loadConfig(tmp);
+    const payload = { eventId: 'same-inbound-event', conversationId: 'conv-allowed', text: 'hello' };
+    const first = replyWithAurabot(tmp, config, payload);
+    await new Promise((resolve) => setImmediate(resolve));
+    const second = await replyWithAurabot(tmp, config, payload);
+    release();
+    const firstResult = await first;
+    check('same inbound event is rejected while first generation is in flight', second.duplicate === true && second.error === 'duplicate-in-flight');
+    check('model outage is recorded as a retryable generation failure', firstResult.error === 'aurabot-http-error');
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 console.log(failures === 0 ? '\nAll self-checks passed.' : `\n${failures} check(s) FAILED.`);
