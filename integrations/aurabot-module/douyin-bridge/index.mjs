@@ -10,7 +10,7 @@ function dshHeaders(s) { return { 'content-type': 'application/json', 'x-douyin-
 async function dshRequest(s, route, payload) {
   const base = String(s.dshBaseUrl ?? '').trim().replace(/\/+$/, '');
   if (!base || !s.dshToken) throw new Error('请配置 DSH 地址和设置服务 Token。');
-  const response = await fetch(base + route, { method: payload === undefined ? 'GET' : 'POST', headers: dshHeaders(s), body: payload === undefined ? undefined : JSON.stringify(payload), signal: AbortSignal.timeout(30000) });
+  const response = await fetch(base + route, { method: payload === undefined ? 'GET' : 'POST', headers: dshHeaders(s), body: payload === undefined ? undefined : JSON.stringify(payload), signal: AbortSignal.timeout(120000) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.message || ('DSH 返回 HTTP ' + response.status));
   return result;
@@ -33,8 +33,11 @@ export default {
     api.route('/message', async (req) => {
       const s = settings(); if (!s.enabled) return { ok: false, message: '抖音桥接模块未启用。' };
       if (!authorized(req, s.sharedSecret)) return { ok: false, message: 'unauthorized' };
-      const body = await api.core.http.body(req); const text = clean(body.text);
-      if (!body.eventId || !body.conversationId || !text) return { ok: false, message: '缺少 eventId、conversationId 或 text。' };
+      const body = await api.core.http.body(req);
+      const eventId = clean(body.eventId, 160); const conversationId = clean(body.conversationId, 200);
+      const rawText = String(body.text ?? '').trim(); const text = clean(rawText, 4000);
+      if (!eventId || !conversationId || !text) return { ok: false, message: '缺少 eventId、conversationId 或 text。' };
+      if (String(body.eventId).length > 160 || String(body.conversationId).length > 200 || rawText.length > 4000) return { ok: false, message: 'eventId、conversationId 或消息正文超过允许长度。' };
       const recent = Array.isArray(body.recentMessages) ? body.recentMessages.slice(-12).map(v => clean(v, 1000)) : [];
       const prompt = [
         '你正在通过抖音私信与一位联系人交流。请使用你当前的人格、模型和记忆，写出下一条自然、贴合上下文、可直接发送的回复。',
@@ -45,13 +48,15 @@ export default {
         '近期对话：', ...recent, '对方最新消息：' + text,
       ].join('\n');
       const replyText = clean(await api.think(prompt, { title: '抖音私信回复', timeoutMs: 60000 }));
-      return replyText ? { ok: true, eventId: body.eventId, replyText } : { ok: false, message: 'Aurabot 未生成有效回复。' };
+      return replyText ? { ok: true, eventId, replyText } : { ok: false, message: 'Aurabot 未生成有效回复。' };
     });
     api.route('/proactive', async (req) => {
       const s = settings(); if (!s.enabled || !s.allowProactive) return { ok: false, message: '主动私信功能未启用。' };
       if (!authorized(req, s.sharedSecret)) return { ok: false, message: 'unauthorized' };
       const body = await api.core.http.body(req);
-      const prompt = ['请根据你当前的人格和记忆，为抖音联系人起草一条自然的主动私信。只输出正文。', '不要群发、骚扰、重复联系或无故打扰；尊重对方拒绝联系的意愿。', '联系人：' + clean(body.senderName, 80), '联系目的：' + clean(body.goal, 500), '上下文：' + clean(body.context, 1500)].join('\n');
+      const conversationId = clean(body.conversationId, 200); const goal = clean(body.goal, 500);
+      if (!conversationId || !goal) return { ok: false, message: '主动私信请求缺少 conversationId 或 goal。' };
+      const prompt = ['请根据你当前的人格和记忆，为抖音联系人起草一条自然的主动私信。只输出正文。', '不要群发、骚扰、重复联系或无故打扰；尊重对方拒绝联系的意愿。', '联系人：' + clean(body.senderName, 80), '联系目的：' + goal, '上下文：' + clean(body.context, 1500)].join('\n');
       const replyText = clean(await api.think(prompt, { title: '抖音主动私信草稿', timeoutMs: 60000 }));
       return replyText ? { ok: true, replyText } : { ok: false, message: 'Aurabot 未生成有效私信。' };
     });
@@ -66,7 +71,9 @@ export default {
         api.defineTool({ name: 'douyin_send_message', description: '向 DSH 已授权的抖音联系人发送一条私信。仅在主人明确要求或当前对话目标确实需要时使用；不要群发、骚扰、重复联系或联系拒绝接收消息的人。DSH 会再次检查联系人权限、每日额度和事件去重。', properties: { conversationId: { type: 'string', description: '来自 douyin_list_contacts 的会话 ID' }, text: { type: 'string', description: '要发送的私信正文' } }, required: ['conversationId', 'text'], execute: async ({ conversationId, text }) => {
           if (!ownerOnly()) return { ok: false, message: '仅主人私聊可主动发送抖音私信。' };
           const message = clean(text); if (!conversationId || !message) return { ok: false, message: '会话 ID 和私信内容不能为空。' };
-          try { const r = await dshRequest(s, '/api/aurabot/send', { eventId: crypto.randomUUID(), conversationId, text: message, source: 'aurabot' }); return r.ok ? { ok: true, message: '已发送给 ' + conversationId } : { ok: false, message: r.message || 'DSH 未发送。' }; } catch (e) { return { ok: false, message: e.message }; }
+          const bucket = Math.floor(Date.now() / 30000);
+          const eventId = crypto.createHash('sha256').update([String(sessionId ?? 'owner'), String(conversationId), message, String(bucket)].join('\\0')).digest('hex');
+          try { const r = await dshRequest(s, '/api/aurabot/send', { eventId, conversationId, text: message, source: 'aurabot' }); return r.ok ? { ok: true, message: '已发送给 ' + conversationId } : { ok: false, message: r.message || 'DSH 未发送。' }; } catch (e) { return { ok: false, message: e.message }; }
         }})
       ];
     });
