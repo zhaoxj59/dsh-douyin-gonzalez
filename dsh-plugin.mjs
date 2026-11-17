@@ -112,9 +112,10 @@ async function runTool(toolName, args, dataDir) {
     case 'dy_aurabot_reply': {
       if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoReply) return { ok: false, error: 'aurabot-auto-reply-disabled', message: '请先在 DSH 设置中启用 Aurabot 桥接和自动回复。' };
       const message = String(args?.message ?? args?.text ?? '').trim();
-      if (!args?.eventId || !args?.conversationId || !message) return { ok: false, error: 'missing-args', message: 'dy_aurabot_reply 需要 eventId、conversationId 和 message。' };
+      if (!args?.conversationId || !message) return { ok: false, error: 'missing-args', message: 'dy_aurabot_reply 需要 conversationId 和非空 message。' };
+      const eventId = String(args.eventId || randomUUID());
       const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
-      return replyWithAurabot(dir, config, { ...args, text: message });
+      return replyWithAurabot(dir, config, { ...args, eventId, text: message });
     }
     case 'dy_dm_reply_stranger': {
       if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply_stranger 需要 conversationId 和非空的 text。' };
