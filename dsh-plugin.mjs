@@ -1,4 +1,4 @@
-// DSH plugin entry, v0.3.4. Modular: 5 packages, one master switch each.
+// DSH plugin entry, v0.4.0. Modular: 5 packages, one master switch each.
 //   core (always on) / interact / discover / publish / safety.
 // A tool whose package is OFF returns package-disabled and does nothing.
 // Write tools additionally pass the risk gate (safety.risk.paused):
@@ -7,9 +7,12 @@
 // v0.3.1: share defaults OFF (config v4 migration), dy_health_check added.
 // v0.3.2: friendly playwright-missing error, dy_fish_share, login on the
 // first page, auto-save, DSH native panel section.
+import { randomUUID } from 'node:crypto';
 import { dataPaths } from './lib/paths.mjs';
 import { loadAllowed, canDoAction, alreadyActedOnVideo, logAction, rotationGate } from './lib/store.mjs';
 import { loadConfig, packageGate } from './lib/config.mjs';
+import { outwardBudgetGate } from './lib/outward-gate.mjs';
+import { aurabotBridgeStatus, generateAurabotReply, generateAurabotProactive } from './lib/aurabot-bridge.mjs';
 
 export const name = 'douyin-gonzalez';
 export const inject = ['tools'];
@@ -19,8 +22,12 @@ export const TOOL_DEFINITIONS = [
   // core (always on)
   { name: 'dy_watch', pkg: 'core', description: '在专用 Edge 里刷抖音一轮（默认 10 分钟），大肥鱼按人设 + 兴趣 + 观看历史自己选片，选片理由记进 watch-log.jsonl。需要先在 Edge 里手动登录抖音。', parameters: { type: 'object', properties: { minutes: { type: 'number', description: '本轮观看分钟数，默认 10' } } }, execute: 'watch' },
   { name: 'dy_list_chats', pkg: 'core', description: '读取抖音私信会话列表，写入本地 chats.json（好友互动页的勾选来源）。', parameters: { type: 'object', properties: {} }, execute: 'listChats' },
+  { name: 'dy_dm_inspect', pkg: 'core', description: '只读检查真实抖音私信 DOM；若当前已打开会话则保留页面，导出结构/语义属性/ID 是否存在，不导出昵称、正文、Cookie 或原始 ID。', parameters: { type: 'object', properties: {} }, execute: 'inspectDm' },
   { name: 'dy_dm_reply', pkg: 'core', description: '给一个已许可会话回一条私信。只回 allowed.json 里勾选过的会话；每人每天上限、全天上限按 config.json；发送结果不明时不自动重发。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReply' },
   { name: 'dy_dm_reply_stranger', pkg: 'core', description: '给一个陌生人回一条私信。只有在设置页显式打开“陌生人私信回复”开关时才可用，有独立的每日上限（默认 3 条），和白名单回复分开计数。默认关闭。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReplyStranger' },
+  { name: 'dy_aurabot_status', pkg: 'core', description: '检查 DSH 到 Aurabot 的 API 连接状态；不会暴露桥接密钥。', parameters: { type: 'object', properties: {} }, execute: 'aurabotStatus' },
+  { name: 'dy_aurabot_reply', pkg: 'core', description: '把一条抖音私信交给 Aurabot，使用它的人格和记忆生成回复，并由 DSH 自动发送；需要开启 Aurabot 桥接与自动回复。', parameters: { type: 'object', properties: { conversationId: { type: 'string', description: 'DSH 会话列表中的稳定会话 ID' }, senderId: { type: 'string' }, senderName: { type: 'string' }, message: { type: 'string' }, recentMessages: { type: 'array', items: { type: 'string' } }, eventId: { type: 'string', description: '消息级稳定 ID；自动监听接入后必须使用抖音消息 ID，手动触发可省略' } }, required: ['conversationId', 'message'] }, execute: 'aurabotReply' },
+  { name: 'dy_aurabot_proactive', pkg: 'core', description: '让 Aurabot 为指定抖音联系人生成主动私信，并由 DSH 自动发送；需要开启主动联系开关，联系人权限和每日额度仍然生效。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, recipientName: { type: 'string' }, goal: { type: 'string' }, context: { type: 'string' }, eventId: { type: 'string' } }, required: ['conversationId', 'recipientName', 'goal'] }, execute: 'aurabotProactive' },
   { name: 'dy_daily_report', pkg: 'core', description: '从本地观看/回复/点赞/评论/分享/发视频记录生成当天的 Markdown 日报，不额外调模型。', parameters: { type: 'object', properties: { date: { type: 'string', description: '日期 YYYY-MM-DD，默认今天' } } }, execute: 'dailyReport' },
   { name: 'dy_astrbot_status', pkg: 'core', description: '查看 AstrBot 桥的状态（是否开启、端口、今日计数）。桥默认关闭，开启也只监听 127.0.0.1 + token。', parameters: { type: 'object', properties: {} }, execute: 'astrbotStatus' },
   { name: 'dy_health_check', pkg: 'core', description: '一键体检：真跑 13 项检查（Edge 登录、看片层、白名单保存读回、危险开关、每日预算总闸、续火花到期、陌生人开关、发片、AstrBot、巡检、风控、大肥鱼记忆互通），返回通过几项、不通过哪几项，每项不通过都写原因。只读本地状态，不改任何文件；Edge 探不到时那项报 unknown，不假装通过。', parameters: { type: 'object', properties: {} }, execute: 'healthCheck' },
@@ -34,7 +41,7 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_sticker', pkg: 'interact', write: true, description: '给一个白名单会话发表情包：先按关键词从收藏的表情包里挑；没有收藏就发兜底文字，绝不假装发表了贴纸。贴纸本身需在 Edge 里人工点发时以挑好的为准。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, keyword: { type: 'string' } }, required: ['conversationId'] }, execute: 'sticker' },
   { name: 'dy_collect_sticker', pkg: 'interact', description: '收藏一个表情包到本地 stickers.json（名字 + 关键词），以后 dy_sticker 按关键词挑它。只写本地文件，不动抖音账号。', parameters: { type: 'object', properties: { name: { type: 'string' }, keywords: { type: 'string' } }, required: ['name'] }, execute: 'collectSticker' },
   { name: 'dy_spark', pkg: 'interact', write: true, description: '给一个白名单好友续火花：发一句一言随机文案。每天几次、几点发、快断预警天数都在设置页 → 互动包 → 续火花里设。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, lastContactAt: { type: 'string' } }, required: ['conversationId'] }, execute: 'spark' },
-  { name: 'dy_reply_own_comments', pkg: 'interact', write: true, description: '回自己视频下的新评论：只看最近 N 天内的作品，每次回几条、每天最多几条、随机还是按顺序、同人只回一次，都在设置页 → 互动包里设。', parameters: { type: 'object', properties: { videoId: { type: 'string' } } }, execute: 'replyOwn' },
+  { name: 'dy_reply_own_comments', pkg: 'interact', write: true, description: '回自己视频下的新评论：旧实现读的是推荐流首页的路人评论、会回错视频和内容，正在重写；开关可先关掉。原设定：只看最近 N 天内的作品，每次回几条、每天最多几条、随机还是按顺序、同人只回一次，都在设置页 → 互动包里设。', parameters: { type: 'object', properties: { videoId: { type: 'string' } } }, execute: 'replyOwn' },
   // discover
   { name: 'dy_hot', pkg: 'discover', description: '读抖音热榜（不用编数据，页面读不到就报 selector-mismatch）。', parameters: { type: 'object', properties: {} }, execute: 'hot' },
   { name: 'dy_search', pkg: 'discover', description: '按关键词搜视频。', parameters: { type: 'object', properties: { keyword: { type: 'string' } }, required: ['keyword'] }, execute: 'search' },
@@ -42,7 +49,7 @@ export const TOOL_DEFINITIONS = [
   { name: 'dy_creator_videos', pkg: 'discover', description: '读一个指定博主最近的作品（给博主主页链接）。', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] }, execute: 'creatorVideos' },
   { name: 'dy_diagnose_creator', pkg: 'discover', description: '创作者诊断（基础版）：把播放/点赞/评论/完播摆出来，列出最可能的原因让鱼分析。不编流量池、不编账号分、不保证爆款。', parameters: { type: 'object', properties: { videoId: { type: 'string' }, title: { type: 'string' }, plays: { type: 'number' }, likes: { type: 'number' }, comments: { type: 'number' }, completionPct: { type: 'number' } }, required: ['videoId'] }, execute: 'diagnose' },
   { name: 'dy_my_posts', pkg: 'discover', description: '看我自己发的作品和每条数据（读不到的数记 null，不编）。', parameters: { type: 'object', properties: {} }, execute: 'myPosts' },
-  { name: 'dy_watch_sources', pkg: 'discover', description: '按设置页 → 发现包勾的来源（推荐流/热榜/搜索/关注/指定博主）刷一轮；没开其他来源就只刷推荐流。', parameters: { type: 'object', properties: { minutes: { type: 'number' } } }, execute: 'watchSources' },
+  { name: 'dy_watch_sources', pkg: 'discover', description: '按设置页 → 发现包勾的来源刷一轮（当前版本实际只刷推荐流，来源导航还没接上，返回里会写明实际刷的来源）。', parameters: { type: 'object', properties: { minutes: { type: 'number' } } }, execute: 'watchSources' },
   // publish
   { name: 'dy_post', pkg: 'publish', write: true, description: '发一条抖音视频。必须给本地视频文件路径 + 文案；发片包总开关 + 自动发视频开关和每日次数按 config.json（默认 0 / 关闭）。没有文件不发，每次发布都记进 post-log.jsonl。', parameters: { type: 'object', properties: { file: { type: 'string' }, caption: { type: 'string' } }, required: ['file'] }, execute: 'post' },
   { name: 'dy_publish_draft', pkg: 'publish', write: true, description: '把一条视频记为草稿（默认存草稿）：标题按模板 {date} 替换、带默认话题；只记草稿不上传，正式发布请在创作者中心点发布。', parameters: { type: 'object', properties: { file: { type: 'string' }, caption: { type: 'string' } }, required: ['file'] }, execute: 'publishDraft' },
@@ -63,6 +70,11 @@ async function runTool(toolName, args, dataDir) {
   if (!def) return { ok: false, error: 'unknown-tool', message: `未知工具 ${toolName}` };
   const pkgGate = packageGate(config, def.pkg);
   if (!pkgGate.ok) return { ok: false, ...pkgGate };
+  const outwardBudgeted = new Set(['dy_like', 'dy_comment', 'dy_comment_mention', 'dy_share', 'dy_favorite', 'dy_sticker', 'dy_spark', 'dy_reply_own_comments']);
+  if (outwardBudgeted.has(toolName)) {
+    const budget = outwardBudgetGate(dir, config);
+    if (!budget.ok) return { ok: false, ...budget };
+  }
   if (def.write) {
     const { riskGate } = await import('./lib/safety.mjs');
     const rg = riskGate(dir, config);
@@ -71,28 +83,57 @@ async function runTool(toolName, args, dataDir) {
   switch (toolName) {
     case 'dy_watch': {
       const { watchRound } = await import('./lib/browser.mjs');
-      return watchRound(dir, { minutes: args?.minutes ?? config.watch.minutesPerRound ?? 10 });
+      // v0.4.0 (M6): minutes 封顶 120 分钟（与配置项 minutesPerRound 的 1–120 一致），
+      // 不让模型 / AstrBot 传个天文数字把一轮刷成几天。
+      const minutes = Math.min(120, Math.max(1, Number(args?.minutes ?? config.watch.minutesPerRound ?? 10) || 10));
+      return watchRound(dir, { minutes });
     }
     case 'dy_watch_sources': {
       const { sourcePlan } = await import('./lib/discover.mjs');
       const plan = sourcePlan(dir, config);
       const { watchRound } = await import('./lib/browser.mjs');
-      const res = await watchRound(dir, { minutes: args?.minutes ?? config.watch.minutesPerRound ?? 10 });
+      const minutes = Math.min(120, Math.max(1, Number(args?.minutes ?? config.watch.minutesPerRound ?? 10) || 10));
+      const res = await watchRound(dir, { minutes });
       return { ...res, sources: plan.sources, sourceMessage: plan.message };
     }
     case 'dy_list_chats': {
       const { listChats } = await import('./lib/browser.mjs');
       return listChats(dir);
     }
+    case 'dy_dm_inspect': {
+      const { inspectDmStructure } = await import('./lib/browser.mjs');
+      return inspectDmStructure(dir);
+    }
     case 'dy_dm_reply': {
-      if (!args?.conversationId || !args?.text) return { ok: false, error: 'missing-args', message: 'dy_dm_reply 需要 conversationId 和 text。' };
+      if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply 需要 conversationId 和非空的 text。' };
       const { replyTo } = await import('./lib/dm.mjs');
       return replyTo(dir, { conversationId: args.conversationId, text: args.text });
     }
+    case 'dy_aurabot_reply': {
+      if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoReply) return { ok: false, error: 'aurabot-auto-reply-disabled', message: '请先在 DSH 设置中启用 Aurabot 桥接和自动回复。' };
+      const message = String(args?.message ?? args?.text ?? '').trim();
+      if (!args?.conversationId || !message) return { ok: false, error: 'missing-args', message: 'dy_aurabot_reply 需要 conversationId 和非空 message。' };
+      const eventId = String(args.eventId || randomUUID());
+      const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
+      return replyWithAurabot(dir, config, { ...args, eventId, text: message });
+    }
     case 'dy_dm_reply_stranger': {
-      if (!args?.conversationId || !args?.text) return { ok: false, error: 'missing-args', message: 'dy_dm_reply_stranger 需要 conversationId 和 text。' };
+      if (!args?.conversationId || !String(args?.text ?? '').trim()) return { ok: false, error: 'missing-args', message: 'dy_dm_reply_stranger 需要 conversationId 和非空的 text。' };
       const { replyToStranger } = await import('./lib/dm.mjs');
       return replyToStranger(dir, { conversationId: args.conversationId, text: args.text });
+    }
+    case 'dy_aurabot_status': {
+      return { ok: true, configured: Boolean(config.aurabotBridge?.baseUrl && config.aurabotBridge?.token), enabled: Boolean(config.aurabotBridge?.enabled), autoReply: Boolean(config.aurabotBridge?.autoReply), autoProactive: Boolean(config.aurabotBridge?.autoProactive), ...(await aurabotBridgeStatus(config)) };
+    }
+    case 'dy_aurabot_proactive': {
+      if (!config.aurabotBridge?.enabled || !config.aurabotBridge?.autoProactive) return { ok: false, error: 'aurabot-proactive-disabled', message: '请先在设置页启用 Aurabot 主动联系。' };
+      if (!args?.conversationId || !args?.recipientName || !args?.goal) return { ok: false, error: 'missing-args', message: '需要 conversationId、recipientName 和 goal。' };
+      const eventId = String(args.eventId || randomUUID());
+      const ai = await generateAurabotProactive(config, { conversationId: String(args.conversationId), senderName: String(args.recipientName), goal: String(args.goal), context: String(args.context ?? '').slice(0, 2000) });
+      if (!ai.ok || !String(ai.replyText ?? '').trim()) return { ok: false, error: ai.error ?? 'aurabot-no-message', message: ai.message ?? 'Aurabot 未生成主动私信。' };
+      const { replyTo } = await import('./lib/dm.mjs');
+      const sent = await replyTo(dir, { conversationId: args.conversationId, text: ai.replyText, eventId });
+      return { ...sent, source: 'aurabot-proactive', messageText: ai.replyText };
     }
     case 'dy_like':
     case 'dy_comment':
@@ -101,12 +142,20 @@ async function runTool(toolName, args, dataDir) {
       const kind = toolName === 'dy_like' ? 'like' : toolName === 'dy_comment' ? 'comment' : toolName === 'dy_favorite' ? 'favorite' : 'mention';
       const videoId = args.videoId;
       if (!videoId) return { ok: false, error: 'missing-args', message: `${toolName} 需要 videoId。` };
+      // v0.4.0 (M2): text 不校验时，空评论会在浏览器层抛错、@ 评论会发出
+      // “@名字 undefined”。分发层统一先拦。
+      if ((kind === 'comment' || kind === 'mention') && !String(args?.text ?? '').trim()) {
+        return { ok: false, error: 'missing-args', message: `${toolName} 需要非空的 text（评论内容）。` };
+      }
       const rot = rotationGate(dir, videoId, kind);
       if (!rot.ok) return { ok: false, ...rot };
       if (kind === 'mention') {
         const { canMentionComment } = await import('./lib/interact.mjs');
         const mg = canMentionComment(dir, config);
         if (!mg.ok) return { ok: false, ...mg };
+        // v0.4.0 (M4): @ 评论之前没有去重，同一视频一天内可重复 @。
+        // 点赞 / 评论 / 收藏三支都有去重，这里补上。
+        if (alreadyActedOnVideo(dir, 'mention', videoId)) return { ok: false, reason: 'duplicate', message: '这个视频已经 @ 评论过，不重复。' };
         const { commentCurrentVideo } = await import('./lib/browser.mjs');
         const result = await commentCurrentVideo(dir, { videoId, text: `@${mg.mentionName} ${args.text}` });
         if (result.sent) logAction(dir, { type: 'mention', status: 'sent', videoId, text: String(args.text).slice(0, 200) });
@@ -135,18 +184,28 @@ async function runTool(toolName, args, dataDir) {
     case 'dy_share': {
       const { planShare, shareVideo } = await import('./lib/share.mjs');
       const video = { videoId: args.videoId, caption: args.caption ?? '', tags: args.tags ?? [] };
+      // v0.4.0: 分享也过商业过滤（浏览器层的 commercialGate 会再拦一次，
+      // 这里先拦住，免得 planShare 白算一轮）。
+      const { classifyCommercialCaption } = await import('./lib/content-filter.mjs');
+      const cf = classifyCommercialCaption(video.caption);
+      if (cf.skip) return { ok: false, reason: 'commercial-skipped', message: `该视频带购物信号（${cf.reason}），按商业过滤规则跳过，不分享。` };
       const plan = planShare(dir, video, config);
       if (!plan.ok) return { ok: false, ...plan };
       if (!plan.recipients.length) return { ok: true, shared: 0, message: plan.message };
       const { shareCurrentVideoTo } = await import('./lib/browser.mjs');
       const results = [];
       for (const person of plan.recipients) {
+        const totalGate = outwardBudgetGate(dir, config);
+        if (!totalGate.ok) { results.push({ personId: person.id, ok: false, reason: totalGate.reason, message: totalGate.message }); break; }
         const gate = canDoAction(dir, 'share', { enabled: config.share.enabled, cap: config.caps.sharePerDay });
         if (!gate.ok) { results.push({ personId: person.id, ok: false, reason: gate.reason }); break; }
         results.push(await shareVideo(dir, video, person, (v, p) => shareCurrentVideoTo(dir, { videoId: v.videoId, personId: p.id, personName: p.name })));
       }
       return { ok: true, shared: results.filter((r) => r.sent).length, results };
     }
+    // NOTE (L3): 表情包兜底与续火花经 sendDm 发私信，计入各自上限与
+    // 每日总闸，但不占 dmReplyPerDay（不写 reply-log）。这是有意为之，
+    // 不是漏记 —— 想改成占私信额度再说。
     case 'dy_sticker': {
       if (!args?.conversationId) return { ok: false, error: 'missing-args', message: 'dy_sticker 需要 conversationId。' };
       const { pickSticker, canSticker } = await import('./lib/interact.mjs');
@@ -180,19 +239,12 @@ async function runTool(toolName, args, dataDir) {
       return { ok: Boolean(result.sent), sent: Boolean(result.sent), warn: plan.warn, text: plan.text };
     }
     case 'dy_reply_own_comments': {
-      const { pickOwnComments } = await import('./lib/interact.mjs');
-      const { listOwnComments, commentCurrentVideo } = await import('./lib/browser.mjs');
-      const listed = await listOwnComments(dir, { videoId: args.videoId });
-      if (!listed.ok) return listed;
-      const picked = pickOwnComments(dir, config, listed.comments);
-      if (!picked.ok) return { ok: false, ...picked };
-      const results = [];
-      for (const c of picked.picked) {
-        const res = await commentCurrentVideo(dir, { videoId: args.videoId ?? c.id, text: c.text ?? '' }).catch(() => ({ ok: false, uncertain: true }));
-        if (res.sent) logAction(dir, { type: 'reply-own', status: 'sent', commentId: c.id, userId: c.userId });
-        results.push({ commentId: c.id, sent: Boolean(res.sent) });
-      }
-      return { ok: true, replied: results.filter((r) => r.sent).length, results };
+      // v0.4.0 (H2/H3): 暂时停用 —— 旧实现读的是推荐流首页的评论
+      // （listOwnComments 打开 DOUYIN_HOME，id 是 c-0/c-1、userId 恒为空），
+      // 会把首页路人评论的原话当成自己的评论发到当前推荐视频上；
+      // oncePerUser 也因 userId 为空退化成“每天只能回 1 条”。
+      // 等重写为“打开自己某条视频页读真实评论 + 模型现写回复”后再开。
+      return { ok: false, reason: 'disabled', message: '回自己视频评论暂时停用：旧实现会回错视频、回错内容（读的是首页路人评论），正在重写。开关可先关掉。' };
     }
     case 'dy_hot': { const { getHotList } = await import('./lib/browser.mjs'); return getHotList(dir); }
     case 'dy_search': {
@@ -241,17 +293,10 @@ async function runTool(toolName, args, dataDir) {
     }
     case 'dy_login_status': {
       // v0.3.2: playwright 没装时返回中文原因 + 修法，不扔英文原文。
+      // v0.4.1: 探 + 存走 refreshLoginStatus，和 POST /api/login/refresh 同一份逻辑。
       try {
-        const { checkLoginStatus } = await import('./lib/browser.mjs');
-        const { recordLogin } = await import('./lib/safety.mjs');
-        const res = await checkLoginStatus(dir);
-        if (res.ok) {
-          const saved = recordLogin(dir, res.loggedIn);
-          const cfg = { ...config, login: saved };
-          const { saveConfig } = await import('./lib/config.mjs');
-          saveConfig(dir, cfg);
-        }
-        return res;
+        const { refreshLoginStatus } = await import('./lib/browser.mjs');
+        return await refreshLoginStatus(dir);
       } catch (e) {
         const { toFriendlyBrowserError } = await import('./lib/browser.mjs');
         return toFriendlyBrowserError(e);
@@ -281,7 +326,9 @@ async function runTool(toolName, args, dataDir) {
     }
     case 'dy_cleanup': {
       const { cleanupOld } = await import('./lib/safety.mjs');
-      return cleanupOld(dir, { retentionDays: config.cleanup.retentionDays ?? 30, dryRun: Boolean(args?.dryRun) });
+      // v0.4.0 (M8): 默认真删改成默认演练 —— 不传 dryRun 就是只看不删，
+      // 须显式传 dryRun: false 才真删（与设置服务 /api/cleanup 默认一致）。
+      return cleanupOld(dir, { retentionDays: config.cleanup.retentionDays ?? 30, dryRun: args?.dryRun === false ? false : true });
     }
     case 'dy_memory': {
       const { appendMemory, readMemory } = await import('./lib/safety.mjs');
@@ -319,7 +366,22 @@ async function runTool(toolName, args, dataDir) {
 export async function apply(ctx, config = {}) {
   const dataDir = config.dataDir ?? process.env.DSH_DOUYIN_DATA_DIR;
   const paths = dataPaths(dataDir);
-  console.log(`[dsh-douyin-gonzalez] loaded v0.3.4. data dir: ${paths.dir}`);
+  console.log(`[dsh-douyin-gonzalez] loaded v0.4.0. data dir: ${paths.dir}`);
+
+  // Start the local settings API before registering optional DSH tools.
+  // Some DSH hosts initialize the tools registry after plugin apply begins;
+  // starting it later (or after the registry check) can leave the settings UI offline.
+  if (process.env.DSH_DOUYIN_AUTO_SETTINGS !== '0') {
+    try {
+      const { startSettingsServer } = await import('./settings/settings-server.mjs');
+      const started = await startSettingsServer(dataDir);
+      console.log(started
+        ? '[dsh-douyin-gonzalez] settings server auto-started on 127.0.0.1:8765'
+        : '[dsh-douyin-gonzalez] settings server did not bind port 8765; check whether another process owns it');
+    } catch (e) {
+      console.error(`[dsh-douyin-gonzalez] settings server auto-start failed: ${e.stack ?? e.message}`);
+    }
+  }
 
   let defineTool = null;
   try { ({ defineTool } = await import('@deepseek-ai/dsh-tools')); } catch { defineTool = null; }
@@ -355,16 +417,7 @@ export async function apply(ctx, config = {}) {
     console.log(`[dsh-douyin-gonzalez] astrbot bridge failed to start (plugin still works): ${e.message}`);
   }
 
-  // v0.3.4：插件加载时自动起设置服务（127.0.0.1:8765），面板不用
-  // 再手动跑 npm run settings。端口已被占就是服务已在跑，不报错。
-  // DSH_DOUYIN_AUTO_SETTINGS=0 可关掉自动起（自检用）。
-  if (process.env.DSH_DOUYIN_AUTO_SETTINGS !== '0') {
-    try {
-      const { startSettingsServer } = await import('./settings/settings-server.mjs');
-      const started = await startSettingsServer();
-      if (started) console.log('[dsh-douyin-gonzalez] settings server auto-started on 127.0.0.1:8765');
-    } catch (e) {
-      console.log(`[dsh-douyin-gonzalez] settings server auto-start failed (plugin still works; run npm run settings manually): ${e.message}`);
-    }
-  }
 }
+
+// Exported for selfcheck only; DSH calls tools through apply().
+export { runTool };

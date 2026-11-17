@@ -1,4 +1,19 @@
-# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.4）
+# dsh-douyin-gonzalez — DSH 抖音独立插件（v0.4.0）
+
+## v0.4.0：对外互动每日总额度改为执行前强制拦截
+
+- 新增 `lib/outward-gate.mjs`，统一统计当天成功执行的点赞、评论、@、分享、收藏、表情、续火花和回自己评论。
+- `caps.totalOutwardPerDay` 不再只是体检提示；在写操作入口执行前强制检查，达到上限后拒绝新动作。
+- 多人分享和批量回复自己的评论，在每个实际发送动作前再次检查总额度，防止一次工具调用内越过总闸。
+- 只统计 `status: sent` 的成功动作；失败、未确认和 planned 不计入成功额度。
+- 新增保守型广告/购物文案过滤：识别明确品牌合作、广告赞助和直接购买 CTA；普通开箱、测评、使用体验默认保留。该过滤只分析当前视频可读取的文案，不声称能识别画面中所有隐性广告。
+- 浏览过程中检测到验证码、安全验证、频繁操作、账号异常等提示时，立即停止本轮浏览并持久化风控暂停；互动入口也会在浏览器页面再次检查，拒绝继续写操作。
+- 新增自检覆盖：混合动作计数、planned 不计数、达到总额后拦截，广告/购物文案过滤、非商业测评保留及平台验证/限流信号识别。
+- 回自己视频评论（`dy_reply_own_comments`）暂时停用：旧实现读的是推荐流首页的路人评论（id 是 `c-0`/`c-1`、userId 恒为空），会把路人原话当成自己的评论发到当前视频上；等重写为“打开自己某条视频页读真实评论 + 模型现写回复”后再开。
+- 设置服务加 token 鉴权：POST `/api/*` 必须带 `X-Douyin-Token` 请求头（token 在数据目录 `settings-token.txt`，设置页同源取）；CORS 不再放行 `*`，只反射回环源。写动作前也过商业过滤（点赞 / 评论 / 分享 / 收藏在浏览器层再拦一次）；清理默认演练不真删；`dy_creator_videos` 只放行 `*.douyin.com`；刷一轮封顶 120 分钟；来源导航暂未生效已在返回和工具描述里写明。
+- 原版 `main` 保持不变；本版本在 `release/v0.4.0-douyin-enhanced` 分支开发。
+
+> 本次版本先落实可验证的安全闸门修复。抖音页面选择器和浏览器互动仍受抖音网页 DOM 变化影响，未完成真实账号实机验证前，不应把它视为已通过实机验收。
 
 刷抖音 + 回私信 + 互动 + 发现 + 发片 + 安全，**5 个包分开装、各自一个总开关**。好友许可名单用真实勾选 + 显式保存，按抖音好友 id 匹配。这是为了解决 LockyBee `dsh-douyin-browser-local` 1.4.7 上用户遇到的问题：私信列表读得到，但点选不了 / 选完不保存。
 
@@ -15,7 +30,7 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 ## v0.3.3：用户提的 6 个问题，逐条落地
 
 1. **报错说人话**：playwright 没装时，以前只扔一句英文 `Cannot find package 'playwright'`。现在 `lib/browser.mjs` 里 import 失败就换成中文原因 + 一步一步的修法（进 `C:\dsh-douyin-gonzalez` 跑 `pnpm install`，装不上就开全局/TUN 再跑或改跑 `npm install`，装完看 `node_modules\playwright` 文件夹在不在）。体检里 Edge 登录那项、设置页 `/api/login/open`、工具 `dy_login_status` 都透传这份中文办法，设置页登录失败时也直接显示出来。
-2. **在线下载**：代码已按 npm 发布要求准备好（`package.json` 有 name/version/files/engines/license，加了 repository/homepage/bugs）。**但还没真的发布到 npm**——发布要用户自己的 npm 账号登录一次、跑 `npm publish`，这一步我做不了（没有用户的 npm 账号/Token），也没假装已发布。发布后的安装命令会是 `dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4`。现在能在线装的办法是 GitHub clone（见“安装”一节），仓库：https://github.com/zhaoxj59/dsh-douyin-gonzalez 。打 Release 的办法也写在“安装”一节了（`git tag v0.3.4` + `gh release create`）。
+2. **在线下载**：代码已按 npm 发布要求准备好（`package.json` 有 name/version/files/engines/license，加了 repository/homepage/bugs）。**但还没真的发布到 npm**——发布要用户自己的 npm 账号登录一次、跑 `npm publish`，这一步我做不了（没有用户的 npm 账号/Token），也没假装已发布。发布后的安装命令会是 `dsh plugin --profile web add dsh-douyin-gonzalez@0.4.0`。现在能在线装的办法是 GitHub clone（见“安装”一节），仓库：https://github.com/zhaoxj59/dsh-douyin-gonzalez 。打 Release 的办法也写在“安装”一节了（`git tag v0.4.0` + `gh release create`）。
 3. **内置到 DSH 里？做不到，但常用项收进了 DSH 原生面板**：DSH 本体是第三方的，改不了、塞不进去，这个没法假装。能做的上限是 DSH 客户端提供的设置注入点（`client.js`）：在 DSH 设置里挂一个“刷抖音（自写）”分区，放最常用的几项（核心包、危险动作总开关、白名单人数、一键体检、登录抖音）和完整设置页地址。5 个包的全部设置（几十个开关 + 数字 + 选人勾选）放不进原生面板，只能留在本地网页设置页（`http://127.0.0.1:8765/`）。所以：原生面板 = 快捷入口 + 常用开关；网页页 = 完整设置。`client.js` 里所有挂接都先判运行时有没有这个能力，没有就静默跳过，绝不拖垮插件本体。
 4. **登录放第一页**：设置页核心包最上面加了“🔑 登录抖音”一节：登录状态 + “打开 Edge 登录抖音”按钮 + 登录失败时显示第 1 条的中文修法。吸顶目录条里也加了“🔑 登录抖音”，一点就跳过去。安全包里原来的“重新扫码登录”保留，两处调同一个接口。
 5. **设置自动保存**：开关/数字/勾选一改就自动保存（500ms 防抖，调已有的 `POST /api/config` + `/api/allowed`），存成功顶部写“已自动保存 HH:MM:SS”，失败写红字原因；“保存全部设置”按钮还留着，当手动兜底。选人勾选也一样，勾完自动保存读回核对。
@@ -60,12 +75,14 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 
 **包关了 = 那个包的工具直接拒绝（`package-disabled`），不加载、不跑定时器。** 想用哪个包，先在设置页打开它的总开关，再开里面的小开关。
 
-## 功能（33 个工具）
+## 功能（37 个工具）
 
 | 包 | 工具 | 说明 |
 |---|---|---|
 | 核心 | `dy_watch` | 专用 Edge 刷抖音一轮（默认 10 分钟），大肥鱼自己选片，记录到 `watch-log.jsonl` |
 | 核心 | `dy_list_chats` | 读私信会话，写入 `chats.json`（选人页的勾选来源） |
+| 核心 | `dy_dm_inspect` | 只读诊断当前私信页 DOM 结构；保留已打开会话，不导出正文或原始 ID |
+| 核心 | `dy_aurabot_status` / `dy_aurabot_reply` / `dy_aurabot_proactive` | 检查 Aurabot API、手动触发 Aurabot 回复、生成并发送经 DSH 权限/额度校验的主动私信 |
 | 核心 | `dy_dm_reply` / `dy_dm_reply_stranger` | 只回 `allowed.json` 里勾选过的会话 / 回陌生人（单独开关，独立上限） |
 | 核心 | `dy_daily_report` | 从本地记录生成 Markdown 日报，不额外调模型 |
 | 核心 | `dy_astrbot_status` | 查看 AstrBot 桥的状态和今日计数 |
@@ -130,28 +147,28 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 - Windows（本插件 `os` 声明为 `win32`，Edge + 抖音电脑版只在 Windows 上验证过思路）
 - Microsoft Edge（系统自带，用 `channel: 'msedge'`，不用另外下载浏览器）
 - Node.js ≥ 22.13，DSH `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.2 <0.3.0-0`（与 LockyBee 1.4.7 相同的范围；DSH 0.2.2-rc.2 不在官方验证表里，见“未验证”）
-- 一个支持看图的模型（刷视频要看画面才有意义）
+- 一个支持看图的模型（刷视频要看画面才有意义；但当前版本选片只读视频文案，不传画面帧给模型——v0.4.0 已去掉每轮截图，见 `lib/browser.mjs` watchRound 注释）
 
-## 安装 / 更新到 v0.3.4
+## 安装 / 更新到 v0.4.0（预发布分支）
 
 ### 办法一：GitHub clone（现在就能在线装）
 
 ```powershell
-git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git C:\dsh-douyin-gonzalez
-cd C:\dsh-douyin-gonzalez
-pnpm install
-node selfcheck.mjs
-dsh plugin --profile web add link:C:\dsh-douyin-gonzalez
+git clone -b release/v0.4.0-douyin-enhanced --single-branch https://github.com/zhaoxj59/dsh-douyin-gonzalez.git C:\dsh-douyin-gonzalez-v040
+cd C:\dsh-douyin-gonzalez-v040
+npm install
+npm test
+dsh plugin --profile web add link:C:\dsh-douyin-gonzalez-v040
 ```
 
-更新：进这个文件夹跑 `git pull`，再 `pnpm install`，重装插件即可。
+更新：进入该目录执行 `git pull origin release/v0.4.0-douyin-enhanced`，再运行 `npm install` 和 `npm test`。此版本与旧版插件同名，切换前请先备份旧插件目录；不要删除 DSH 的插件数据目录。
 
 ### 办法二：npm 在线安装（还没发布，先别跑）
 
 代码已按 npm 发布要求准备好（name/version/files/engines/license/repository/homepage/bugs 齐全），但**还没发布到 npm**：发布要用户自己的 npm 账号登录一次、跑 `npm publish`，没有用户的 npm 账号/Token，这一步做不了。发布后安装命令会是：
 
 ```powershell
-dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4
+dsh plugin --profile web add dsh-douyin-gonzalez@0.4.0
 ```
 
 等 DSH 市场收录后，也可以直接在市场里搜 `dsh-douyin-gonzalez` 安装——同样还没收录，别去搜了，搜不到。
@@ -160,9 +177,9 @@ dsh plugin --profile web add dsh-douyin-gonzalez@0.3.4
 
 ```powershell
 cd C:\dsh-douyin-gonzalez
-git tag v0.3.4
-git push origin v0.3.4
-gh release create v0.3.4 --title "v0.3.4" --notes "友好报错、登录放第一页、自动保存、DSH 原生面板、大肥鱼记忆分享"
+git tag v0.4.0
+git push origin v0.4.0
+gh release create v0.4.0 --title "v0.4.0" --notes "互动总额度强制拦截、商业内容过滤、平台挑战熔断"
 ```
 
 ### 本地自检
@@ -175,7 +192,7 @@ node selfcheck.mjs
 
 `selfcheck.mjs` 不需要 DSH、不用登录抖音、不用联网（除 `pnpm install` 本身），跑完应全部 PASS。
 
-DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.3.4`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
+DSH Desktop：应用 → 桌面插件，填 `dsh-douyin-gonzalez@0.4.0`（未发布到 npm 时用 link 方式，见下），**完全退出 DSH 再重新打开**。
 
 ```powershell
 dsh plugin --profile web add link:C:\path\to\dsh-douyin-gonzalez
@@ -231,7 +248,7 @@ v0.3.2 的面板挂接用错了 API（调了 DSH 里不存在的方法），所�
 11. **ComfyUI**：发片包开、ComfyUI 开并填了输出目录，调 `dy_comfyui_latest`，应返回目录里最新的 .mp4；没填目录应报 `no-output-dir`。
 12. **谷时 + 巡检**：安全包开、谷时开，13:00 调 `dy_patrol` 应在谷时内；10:00 调应在谷时外、只记录不刷；返回的下次间隔应在 30 分钟 ±20% 内。
 13. **风控**：调 `dy_risk_status` 看状态；风控暂停时调任何写动作（如 `dy_like`）应被 `risk-paused` 挡下；调 `dy_risk_status` 带 `clear: true` 解除后才能继续。
-14. **登录状态**：安全包开，调 `dy_login_status`，应返回已登录/未登录/要验证码；未登录时设置页首页红字。
+14. **登录状态**：面板点“刷新状态”（或调 `dy_login_status`），应真去 Edge 里探一次并存下来，返回已登录/未登录/要验证码；登上后点刷新应变已登录，未登录时设置页首页红字。
 15. **一键清理**：调 `dy_cleanup` 带 `dryRun: true`，应先演练、列出会删的文件数，不真删。
 16. **抖音记忆**：安全包开、记忆开，调 `dy_memory`（`mode: 'add'`）记一句，再调 `mode: 'read'` 应读回来。
 17. **看片**：调 `dy_analyze_video`（`durationMin: 90`），应返回“超过划走阈值，直接划走”；`durationMin: 10` 应返回“跳着看”；开转写但本机没装 Whisper 时，应报转写不可用、内容未就绪，依赖内容的动作先跳过。
@@ -253,6 +270,50 @@ v0.3.2 的面板挂接用错了 API（调了 DSH 里不存在的方法），所�
 2. **分享默认关**：新装（没有 config.json）时分享开关是关的，调 `dy_share` 应被挡下；把 v0.3.0 的 config.json（分享开着）放进来再加载，应被读成关的，再打开开关保存后才恢复。
 3. **预算总闸**：把点赞 10 + 评论 3 + 分享 3 全打开，合计 16 没超总闸 20，体检预算项应通过；再把收藏 5 也打开，合计 21 超了，体检应报不通过并列出分项。
 4. **吸顶目录条**：设置页往下翻到点赞那块，顶上的目录条应一直看得见，点“安全包”应跳到安全包。
+
+## Aurabot 私信 API 桥接（v0.4.0 开发分支）
+
+DSH 仍是独立抖音插件；Aurabot 只作为 AI 回复服务，不迁移 DSH，也不替 DSH 操作浏览器。
+
+### 当前已加入的桥接组件
+
+- DSH API 客户端：`lib/aurabot-bridge.mjs`
+- Aurabot 用户模块样例：`integrations/aurabot-module/douyin-bridge/index.mjs`
+- DSH 工具：`dy_aurabot_status`、`dy_aurabot_reply`、`dy_aurabot_proactive`；新增只读诊断工具 `dy_dm_inspect`，可导出脱敏后的私信页面 DOM 结构（不含昵称、消息正文、Cookie 或原始会话 ID）。
+- DSH 设置页：桥接开关、Aurabot 服务 Origin、共享密钥、自动回复和主动联系开关。
+- Aurabot 通过 `api.think()` 使用现有人格与记忆生成回复；只有 DSH 执行抖音消息发送。
+
+### 一键整合安装（Windows 预览版）
+
+仓库根目录提供 `install-all.ps1`，可同时安装 DSH 独立插件和 Aurabot 用户模块；更新使用 `update-all.ps1`。安装前会备份代码目录，不会删除 DSH 数据目录或 Aurabot 人格/记忆。若检测到同 ID 的现有 Aurabot 模块与本包不同，默认停止，只有显式传入 `-ReplaceExistingBridge` 才会替换。
+
+**自动收件监听尚未完成**，所以该安装包目前提供的是桥接与手动回复工具，不是“新私信自动进来就自动回复”的已验收整合版。
+
+### 手动安装 Aurabot 模块
+
+将 `integrations/aurabot-module/douyin-bridge/` 整个目录复制到：
+
+```text
+%USERPROFILE%\\.dsh\\plugins-data\\aurabot\\modules\\douyin-bridge\\
+```
+
+在 Aurabot「模块」页面启用模块，并设置桥接密钥。DSH 设置页中的密钥必须完全一致。 明确表示“别联系我 / 不要再私信 / 停止联系”等拒绝联系的消息会被 DSH 加入本地 `blocked.json`，并优先于白名单拦截后续发送。
+
+### API 地址
+
+Aurabot 路由由 DSH Web Server 注册，路径为：
+
+- `/aurabot/api/ext/douyin-bridge/health`
+- `/aurabot/api/ext/douyin-bridge/message`
+- `/aurabot/api/ext/douyin-bridge/proactive`
+
+DSH 设置里的服务地址只填 DSH Web Server 的 Origin（协议 + 主机 + 端口），不要填本地设置页 `127.0.0.1:8765`。本机 HTTP 可用；跨机器访问必须 HTTPS。具体端口以当前 DSH Web 面板实际地址为准，不在代码里猜测。
+
+### 当前阶段边界
+
+本轮进一步修正了 DSH 工具参数到 Aurabot 模块 `text` 字段的映射、主动私信响应 `replyText` 的读取，以及入站/出站发送时将 `eventId` 交给 DSH 私信日志去重；设置页新增“测试 Aurabot 连接”按钮，健康检查走 `/aurabot/api/ext/douyin-bridge/health`。自检增加了桥接 payload、健康路由和非许可联系人拒绝发送的覆盖。
+
+当前分支已补强：入站消息先由 DSH 检查白名单/陌生人开关/拒绝联系黑名单，再交给 Aurabot；同一事件加并发锁并区分生成失败、发送中、已发送和不确定状态；发送全局串行化以避免并发越过总额度。只读 DOM 检查器会保留已打开的私信会话并输出脱敏结构线索。**自动收件监听仍未完成**：未读状态、消息正文、发送者和消息级稳定 ID 尚未基于真实登录页面验证，也没有持续轮询；因此不能把这一步误称为“收到私信就自动回复已完成”。
 
 ## AstrBot 互通（v0.2.0，第 7 项，v0.3.0 不变）
 
@@ -317,7 +378,7 @@ POST 到你填的 webhookUrl，JSON：
 - 包总开关：关了的包，工具直接拒绝，不加载、不跑定时器。
 - 风控暂停：限流 / 验证码时所有写动作停手，记日志，不自动重发；解除要人工确认。
 - 不回陌生人：开关默认关闭；开了也有独立每日上限，和白名单分开计数。
-- 评论、点赞、发视频、AstrBot 默认全关；发视频没有本地文件坚决不发。
+- 评论、点赞、发视频、AstrBot 默认全关；发视频没有本地文件坚决不发。发视频路径由调用方给：模型给任意本地视频路径都会上传（只验扩展名 / 存在 / 大小），请只在信任的调用下使用。
 - 分享只给白名单里兴趣匹配的人，不群发；同一视频 + 同一个人只分享一次，永久去重。
 - 同一视频一天内只做一种动作（动作轮转）。
 - 每人每天 / 全天 / 各类动作的上限都在代码里按天强制执行，超了就挡下。
@@ -335,11 +396,11 @@ POST 到你填的 webhookUrl，JSON：
 
 已验证（本机 Linux，Node v24）：
 - `node --check` 全部 JS 文件通过
-- `node selfcheck.mjs` 全部通过（见本节末尾的最新数字）：manifest、33 个工具及包归属、设置页（5 个标签页 + 顶部状态卡 + 全部新分区）、config v4 默认值 + 往返 + 越界截断 + v2/v3 迁移、allowed.json v2 带兴趣往返、陌生人门（关时拒绝）、各类上限强制执行、动作轮转、分享按兴趣挑人 + 永久去重、发视频门（无文件 / 非视频 / 找不到文件都拒绝）、收藏/表情包/续火花/回自己评论/@评论各门、发现来源与诊断、标题模板与 ComfyUI 取最新文件、谷时窗口（13:00 在内、10:00 在外）、巡检抖动、风控暂停与解除、抖音记忆写读、看片阈值与转写不可用、AstrBot 默认关闭 + 无 token 拒绝启动、日报含收藏/续火花数、一键体检 13 项真跑、分享默认关
+- `node selfcheck.mjs` 全部通过（见本节末尾的最新数字）：manifest、36 个工具及包归属、设置页（5 个标签页 + 顶部状态卡 + 全部新分区）、config v4 默认值 + 往返 + 越界截断 + v2/v3 迁移、allowed.json v2 带兴趣往返、陌生人门（关时拒绝）、各类上限强制执行、动作轮转、分享按兴趣挑人 + 永久去重、发视频门（无文件 / 非视频 / 找不到文件都拒绝）、收藏/表情包/续火花/回自己评论/@评论各门、发现来源与诊断、标题模板与 ComfyUI 取最新文件、谷时窗口（13:00 在内、10:00 在外）、巡检抖动、风控暂停与解除、抖音记忆写读、看片阈值与转写不可用、AstrBot 默认关闭 + 无 token 拒绝启动、日报含收藏/续火花数、一键体检 13 项真跑、分享默认关
 - 设置服务真实跑通过：`GET /` 200；`GET /api/config` → `POST` 改互动包开 / 发现包开 / 点赞 7 条 / 续火花 2 次 → `GET` 读回一致；`POST /api/allowed` 带兴趣保存 → 读回一致；`GET /api/status`（含风控与登录状态）、`/api/memory`、`/api/cleanup`（演练）、`/api/risk/clear` 均返回 200
 
 未验证（这台 Linux 虚拟机做不到，需在用户 Windows 云电脑上做）：
-- 真实 DSH Desktop 0.2.2-rc.2 里安装、加载、33 个工具调用
+- 真实 DSH Desktop 0.2.2-rc.2 里安装、加载、36 个工具调用
 - 真实 Edge 登录抖音、刷视频、私信列表读取、真实回一条私信、评论 / 点赞 / 分享 / 收藏 / 续火花 / 发视频各一次
 - 真实 AstrBot 安装并调通桥（AstrBot 本身不在本机）
 - 真实 ComfyUI 安装并取最新成片（ComfyUI 不在本机）

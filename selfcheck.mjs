@@ -1,5 +1,5 @@
-// Self-check v0.3.2 (no DSH, no Douyin login, no network needed).
-// Verifies: manifest + patch + entry exports, the 32 tools in 5 packages,
+// Self-check v0.4.0 (no DSH, no Douyin login, no network needed).
+// Verifies: manifest + patch + entry exports, the 37 tools in 5 packages,
 // settings page (5 tabs + top status cards + all new sections),
 // config v4 defaults + round-trip + v2/v3 migration, allowed.json v2,
 // stranger gate, caps, rotation, whitelist sharing, post/draft gates,
@@ -23,7 +23,7 @@ function check(name, ok, detail = '') {
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 check('package.json name', pkg.name === 'dsh-douyin-gonzalez', pkg.name);
-check('package.json version 0.3.4', pkg.version === '0.3.4', pkg.version);
+check('package.json version 0.4.0', pkg.version === '0.4.0', pkg.version);
 check('package.json type module', pkg.type === 'module');
 check('dsh.bundle.patch points at cordis.bundle.yml', pkg.dsh?.bundle?.patch === './cordis.bundle.yml');
 check('dsh.client platform web', pkg.dsh?.client?.platform === 'web');
@@ -41,12 +41,12 @@ const entry = await import('./dsh-plugin.mjs');
 check('entry exports name', entry.name === 'douyin-gonzalez', entry.name);
 check('entry inject includes tools', Array.isArray(entry.inject) && entry.inject.includes('tools'));
 check('entry exports apply()', typeof entry.apply === 'function');
-const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
+const ALL_TOOLS = ['dy_watch', 'dy_list_chats', 'dy_dm_inspect', 'dy_dm_reply', 'dy_dm_reply_stranger', 'dy_aurabot_status', 'dy_aurabot_reply', 'dy_aurabot_proactive', 'dy_daily_report', 'dy_astrbot_status', 'dy_health_check',
   'dy_like', 'dy_comment', 'dy_comment_mention', 'dy_share', 'dy_favorite', 'dy_sticker', 'dy_collect_sticker', 'dy_spark', 'dy_reply_own_comments',
   'dy_hot', 'dy_search', 'dy_following', 'dy_creator_videos', 'dy_diagnose_creator', 'dy_my_posts', 'dy_watch_sources',
   'dy_post', 'dy_publish_draft', 'dy_comfyui_latest',
   'dy_patrol', 'dy_login_status', 'dy_cleanup', 'dy_memory', 'dy_risk_status', 'dy_analyze_video', 'dy_fish_share'];
-check('33 tools defined', entry.TOOL_DEFINITIONS?.length === 33, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
+check('37 tools defined', entry.TOOL_DEFINITIONS?.length === 37, entry.TOOL_DEFINITIONS?.map((t) => t.name).join(', '));
 for (const want of ALL_TOOLS) check(`tool ${want} exists`, entry.TOOL_DEFINITIONS.some((t) => t.name === want));
 for (const [tool, pkgName] of [['dy_like', 'interact'], ['dy_hot', 'discover'], ['dy_post', 'publish'], ['dy_patrol', 'safety'], ['dy_watch', 'core']]) {
   check(`tool ${tool} gated by package ${pkgName}`, entry.TOOL_DEFINITIONS.find((t) => t.name === tool)?.pkg === pkgName);
@@ -66,7 +66,7 @@ check('dy_post requires file', (() => {
   process.env.DSH_DOUYIN_AUTO_SETTINGS = '0'; // 自检不自动起 8765，否则进程挂住退不出
   await entry.apply(fakeCtx, { dataDir: path.join(os.tmpdir(), 'dy-gonzalez-selfcheck') });
   check('tool dy_health_check gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_health_check')?.pkg === 'core');
-check('apply() registers 33 tools on fake ctx.tools', registered.length === 33, registered.join(', '));
+check('apply() registers 37 tools on fake ctx.tools', registered.length === 37, registered.join(', '));
 check('dy_fish_share is gated by package core', entry.TOOL_DEFINITIONS.find((t) => t.name === 'dy_fish_share')?.pkg === 'core');
 }
 
@@ -83,7 +83,10 @@ check('settings page reloads saved state', html.includes('/api/allowed') && html
 check('settings page has 5 package tabs', ['pane-core', 'pane-interact', 'pane-discover', 'pane-publish', 'pane-safety'].every((s) => html.includes(s)));
 check('settings page has top status cards', html.includes('cardLogin') && html.includes('cardCounts') && html.includes('cardSpark') && html.includes('cardRisk'));
 check('settings page has comment/like section', html.includes('自行评论') && html.includes('自行点赞'));
-check('settings page has stranger section', html.includes('陌生人私信'));
+check('settings page has stranger section', html.includes('非白名单联系人') || html.includes('陌生人私信'));
+check('settings page has Aurabot bridge controls', html.includes('Aurabot 智能私信桥接') && html.includes('cfg-aurabotBridge-autoReply') && html.includes('cfg-aurabotBridge-autoProactive'));
+check('Aurabot module example uses api.think and authenticated routes', fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'index.mjs'), 'utf8').includes('api.think') && fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'index.mjs'), 'utf8').includes('api.route'));
+check('Aurabot bridge client rejects missing credentials', (await (await import('./lib/aurabot-bridge.mjs')).aurabotBridgeStatus({ aurabotBridge: {} })).error === 'aurabot-not-configured');
 check('settings page has share-by-interest section', html.includes('按兴趣挑人') || html.includes('兴趣'));
 check('settings page has auto-post section', html.includes('自行发抖音'));
 check('settings page has auto-choose section', html.includes('自己选片'));
@@ -111,10 +114,47 @@ const serverSrc = fs.readFileSync(path.join(ROOT, 'settings', 'settings-server.m
 check('settings server has /api/config', serverSrc.includes('/api/config'));
 check('settings server has /api/status', serverSrc.includes('/api/status'));
 check('settings server has /api/login/open', serverSrc.includes('/api/login/open'));
+check('settings server has /api/login/refresh', serverSrc.includes('/api/login/refresh'));
 check('settings server has /api/risk/clear', serverSrc.includes('/api/risk/clear'));
 check('settings server has /api/cleanup', serverSrc.includes('/api/cleanup'));
 check('settings server has /api/memory', serverSrc.includes('/api/memory'));
 check('settings server has /api/health', serverSrc.includes('/api/health'));
+
+// Platform challenge signals must trigger a stop, never an automated bypass.
+{
+  const { classifyPlatformStopText } = await import('./lib/browser.mjs');
+  check('platform stop detects captcha prompt', Boolean(classifyPlatformStopText('请输入验证码完成安全验证')));
+  check('platform stop detects rate-limit warning', Boolean(classifyPlatformStopText('操作过于频繁，请稍后再试')));
+  check('platform stop ignores ordinary feed text', classifyPlatformStopText('今天分享一个有趣的科技视频') === null);
+}
+
+// v0.4.0 commercial filter skips explicit ads / purchase CTAs but keeps reviews.
+{
+  const { classifyCommercialCaption } = await import('./lib/content-filter.mjs');
+  check('commercial filter skips explicit brand sponsorship', classifyCommercialCaption('本视频为品牌合作内容').skip === true);
+  check('commercial filter skips shopping CTA', classifyCommercialCaption('点击购买，进店领券马上下单').skip === true);
+  check('commercial filter preserves non-sponsored unboxing review', classifyCommercialCaption('真实体验：这款耳机开箱测评，优缺点都说说').skip === false);
+  check('commercial filter does not treat product mention alone as ad', classifyCommercialCaption('今天分享一下我用的相机').skip === false);
+}
+
+// v0.4.0 combined outward-action budget is enforced from successful logs.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-outward-'));
+  const { logAction } = await import('./lib/store.mjs');
+  const { outwardBudgetGate, outwardActionCount } = await import('./lib/outward-gate.mjs');
+  const cfg = { caps: { totalOutwardPerDay: 3 } };
+  check('outward budget starts with remaining allowance', outwardBudgetGate(tmp, cfg).remaining === 3);
+  logAction(tmp, { type: 'like', status: 'sent', videoId: 'v1' });
+  logAction(tmp, { type: 'comment', status: 'sent', videoId: 'v2' });
+  logAction(tmp, { type: 'share', status: 'planned', videoId: 'v3' });
+  const mid = outwardBudgetGate(tmp, cfg);
+  check('outward budget counts only successful sends', mid.ok === true && mid.used === 2 && mid.remaining === 1);
+  logAction(tmp, { type: 'mention', status: 'sent', videoId: 'v4' });
+  const full = outwardBudgetGate(tmp, cfg);
+  check('outward budget blocks at combined cap across action types', full.ok === false && full.reason === 'total-outward-cap' && full.used === 3);
+  check('outward action counter includes mention but excludes planned', outwardActionCount({ byType: { like: 1, mention: 1, share: 0 } }) === 2);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
 
 // Config v4 defaults + round-trip + v2/v3 migration.
 {
@@ -504,13 +544,14 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   const friendly = browser.toFriendlyBrowserError(new Error("Cannot find package 'playwright' imported from lib/browser.mjs"));
   check('playwright-missing error is Chinese + has fix steps', friendly.ok === false && friendly.error === 'playwright-missing' && friendly.message.includes('playwright 没装') && friendly.fix.includes('pnpm install') && friendly.fix.includes('node_modules\\playwright'));
   check('non-playwright browser error keeps its own message', browser.toFriendlyBrowserError(new Error('Edge crashed')).error === 'browser-error');
-  // getContext must surface the friendly text when playwright is absent
-  // on this box (no node_modules here): it throws, message in Chinese.
+  // Environment-dependent: if Edge + Playwright exist, launch/close succeeds;
+  // otherwise the plugin must return the friendly missing-Playwright message.
   try {
-    await browser.getContext(path.join(os.tmpdir(), 'dy-gonzalez-no-pw-' + Date.now()));
-    check('getContext throws friendly error without playwright', false, 'did not throw');
+    const ctx = await browser.getContext(path.join(os.tmpdir(), 'dy-gonzalez-edge-check-' + Date.now()));
+    await ctx.close();
+    check('getContext opens Edge when browser runtime is available', true);
   } catch (e) {
-    check('getContext throws friendly error without playwright', String(e.message).includes('playwright 没装') && String(e.message).includes('pnpm install'), String(e.message).slice(0, 80));
+    check('getContext gives friendly error when browser runtime is unavailable', String(e.message).includes('playwright 没装') && String(e.message).includes('pnpm install'), String(e.message).slice(0, 120));
   }
 }
 
@@ -563,10 +604,29 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   check('client.js uses settings.section slot, not addSection', clientSrc.includes("settings.section") && !clientSrc.includes('addSection') && !clientSrc.includes('addToggle') && !clientSrc.includes('addButton'));
   check('client.js factory returns inject slots+locale', clientSrc.includes("inject = ['slots', 'locale']") && clientSrc.includes('module.exports.inject'));
   check('client.js registers section id douyin-gonzalez with label', clientSrc.includes("id: 'douyin-gonzalez'") && clientSrc.includes('刷抖音（自写）'));
-  check('client.js panel talks to local settings server', clientSrc.includes('127.0.0.1:8765') && clientSrc.includes('/api/config') && clientSrc.includes('/api/health') && clientSrc.includes('/api/login/open'));
+  check('client.js panel talks to local settings server', clientSrc.includes('127.0.0.1:8765') && clientSrc.includes('/api/config') && clientSrc.includes('/api/health') && clientSrc.includes('/api/login/open') && clientSrc.includes('/api/login/refresh'));
+  check('client.js refresh button probes login before reloading', clientSrc.includes('refreshStatus') && clientSrc.includes("onClick: refreshStatus"));
   check('client.js panel has package toggles + health + login buttons', clientSrc.includes('togglePkg') && clientSrc.includes('一键体检') && clientSrc.includes('打开 Edge 登录抖音'));
   check('package.json client inject lists slots + locale + runtime', ['@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-runtime'].every((s) => (pkg.dsh?.client?.inject ?? []).includes(s)) && !pkg.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings-general'));
   check('settings server sends CORS for the panel fetch', fs.readFileSync(path.join(ROOT, 'settings', 'settings-server.mjs'), 'utf8').includes('Access-Control-Allow-Origin'));
+}
+
+// v0.4.1: “刷新状态”真去探登录；只认可见的登录按钮。
+{
+  const browserSrc = fs.readFileSync(path.join(ROOT, 'lib', 'browser.mjs'), 'utf8');
+  check('isLoggedIn only counts visible login buttons', browserSrc.includes(':visible') && browserSrc.includes('loginButton'));
+  check('browser exports refreshLoginStatus (probe + persist)', browserSrc.includes('export async function refreshLoginStatus'));
+  const { isLoggedIn } = await import('./lib/browser.mjs');
+  const fakePage = (visibleCount) => ({ locator: (sel) => ({ first: () => ({ count: async () => (String(sel).includes(':visible') ? visibleCount : 1) }) }) });
+  check('isLoggedIn ignores a hidden login button', (await isLoggedIn(fakePage(0))) === true);
+  check('isLoggedIn reports logged-out when a visible login button exists', (await isLoggedIn(fakePage(1))) === false);
+  const htmlSrc = fs.readFileSync(path.join(ROOT, 'settings', 'settings.html'), 'utf8');
+  check('settings page refresh button probes login before reloading', htmlSrc.includes('/api/login/refresh') && htmlSrc.includes('refreshLoginStatus'));
+  const pluginSrc = fs.readFileSync(path.join(ROOT, 'dsh-plugin.mjs'), 'utf8');
+  check('dy_login_status reuses refreshLoginStatus', pluginSrc.includes('refreshLoginStatus'));
+  const ps1Src = fs.readFileSync(path.join(ROOT, 'install-all.ps1'), 'utf8');
+  check('install-all.ps1 auto-installs Node when missing', ps1Src.includes('v22.23.5') && ps1Src.includes('msiexec') && ps1Src.includes('Get-Command node'));
+  check('install-all.ps1 is UTF-8 with BOM (PowerShell 5.1 reads it as UTF-8)', fs.readFileSync(path.join(ROOT, 'install-all.ps1')).subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])));
 }
 
 // v0.3.4: settings server auto-starts when the plugin loads.
@@ -591,22 +651,22 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
-// v0.3.2: README is honest about online install + release + fish.
+// v0.4.0: README is honest about online install + release + fish.
 {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
-  check('README documents GitHub clone install', readme.includes('git clone https://github.com/zhaoxj59/dsh-douyin-gonzalez.git'));
+  check('README documents GitHub clone install', readme.includes('git clone -b release/v0.4.0-douyin-enhanced --single-branch https://github.com/zhaoxj59/dsh-douyin-gonzalez.git'));
   check('README says plainly npm is NOT published yet', readme.includes('还没发布到 npm'));
-  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.3.4'));
-  check('README documents git tag + gh release', readme.includes('git tag v0.3.4') && readme.includes('gh release create'));
+  check('README gives the post-publish install command', readme.includes('dsh-douyin-gonzalez@0.4.0'));
+  check('README documents git tag + gh release', readme.includes('git tag v0.4.0') && readme.includes('gh release create'));
   check('README documents fish share as one-way only', readme.includes('单向分享') && readme.includes('不是双向实时对话'));
   check('README documents DSH native panel limits', readme.includes('DSH 本体是第三方的') && readme.includes('原生面板'));
   check('README documents auto-save', readme.includes('自动保存') && readme.includes('500ms'));
   check('README documents login on the first page', readme.includes('核心包最上面') || readme.includes('登录抖音'));
-  check('README version is 0.3.4', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音插件（自写，v0.3.4）'));
+  check('README version is 0.4.0', readme.startsWith('# dsh-douyin-gonzalez — DSH 抖音独立插件（v0.4.0）'));
 }
 
 // Settings server really runs: save config -> read back identical,
-// POST /api/health returns the 12 checks (Edge probe is unknown on
+// POST /api/health returns the 13 checks (Edge probe is unknown on
 // this Linux box — no Edge — and must not crash the endpoint).
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-server-'));
@@ -625,25 +685,250 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
     }
     check('settings server starts on a temp port', up);
     if (up) {
-      const saveRes = await fetch(`${base}/api/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: { packages: { interact: { enabled: true } }, autoLike: { enabled: true, perDay: 7 }, share: { enabled: false }, caps: { totalOutwardPerDay: 25 } } }) }).then((r) => r.json());
+      // v0.4.0 (H1): 写接口要带 token；不带 token 直接 401。
+      const tokenRes = await fetch(`${base}/api/token`).then((r) => r.json()).catch(() => ({}));
+      const settingsToken = tokenRes.token || '';
+      check('settings server GET /api/token returns a token', typeof settingsToken === 'string' && settingsToken.length >= 32);
+      const noTokenRes = await fetch(`${base}/api/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: {} }) }).then((r) => r.json());
+      check('settings server POST without token is rejected (401)', noTokenRes.ok === false && noTokenRes.error === 'unauthorized');
+      const authHeaders = { 'Content-Type': 'application/json', 'X-Douyin-Token': settingsToken };
+      const saveRes = await fetch(`${base}/api/config`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ config: { packages: { interact: { enabled: true } }, autoLike: { enabled: true, perDay: 7 }, share: { enabled: false }, caps: { totalOutwardPerDay: 25 } } }) }).then((r) => r.json());
       check('settings server POST /api/config saves', saveRes.ok === true);
       const back = await fetch(`${base}/api/config`).then((r) => r.json());
       check('settings server GET /api/config reads back the save', back.autoLike?.perDay === 7 && back.packages?.interact?.enabled === true && back.caps?.totalOutwardPerDay === 25 && back.share?.enabled === false);
-      const allowedSave = await fetch(`${base}/api/allowed`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed: [{ id: 'conv-1', name: '阿明', kind: 'dm', interests: ['美食'] }] }) }).then((r) => r.json());
+      const allowedSave = await fetch(`${base}/api/allowed`, { method: 'POST', headers: authHeaders, body: JSON.stringify({ allowed: [{ id: 'conv-1', name: '阿明', kind: 'dm', interests: ['美食'] }] }) }).then((r) => r.json());
       check('settings server POST /api/allowed saves + reads back', allowedSave.ok === true && allowedSave.readBack?.allowed?.length === 1);
       const allowedBack = await fetch(`${base}/api/allowed`).then((r) => r.json());
       check('settings server GET /api/allowed reads back the save', allowedBack.allowed?.[0]?.id === 'conv-1' && allowedBack.allowed?.[0]?.interests?.[0] === '美食');
-      const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST' }).then((r) => r.json());
-      check('settings server POST /api/login/open gives friendly playwright-missing error on this box', loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install') && loginOpen.message.includes('playwright'), loginOpen.message ?? '');
-      const health = await fetch(`${base}/api/health`, { method: 'POST' }).then((r) => r.json());
+      const loginOpen = await fetch(`${base}/api/login/open`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
+      check('settings server POST /api/login/open either opens Edge or returns friendly missing-runtime error', loginOpen.ok === true || (loginOpen.ok === false && loginOpen.error === 'playwright-missing' && typeof loginOpen.fix === 'string' && loginOpen.fix.includes('pnpm install')), loginOpen.message ?? '');
+      const noTokenRefresh = await fetch(`${base}/api/login/refresh`, { method: 'POST' }).then((r) => r.json());
+      check('settings server POST /api/login/refresh without token is rejected (401)', noTokenRefresh.ok === false && noTokenRefresh.error === 'unauthorized');
+      const refresh = await fetch(`${base}/api/login/refresh`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
+      check('settings server POST /api/login/refresh returns a valid environment-dependent result', refresh.ok === true
+        ? typeof refresh.loggedIn === 'boolean'
+        : typeof refresh.message === 'string' && refresh.message.length > 0, refresh.message ?? '');
+      const cfgAfterRefresh = await fetch(`${base}/api/config`).then((r) => r.json());
+      check('login refresh persists only a successful probe and never invents a state', refresh.ok === true
+        ? cfgAfterRefresh.login?.loggedIn === refresh.loggedIn
+        : cfgAfterRefresh.login?.loggedIn === null || cfgAfterRefresh.login?.loggedIn === undefined);
+      const health = await fetch(`${base}/api/health`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/health returns 13 checks', Array.isArray(health.checks) && health.checks.length === 13 && typeof health.summary === 'string', health.summary ?? '');
-      check('settings server health: edge-login is unknown on Linux, not a crash', health.checks?.find((c) => c.id === 'edge-login')?.status === 'unknown');
+      check('settings server health: edge-login returns a valid environment-dependent status', ['unknown', 'pass', 'fail'].includes(health.checks?.find((c) => c.id === 'edge-login')?.status));
       check('settings server health: share OFF passes dangerous-off only if nothing else is on', health.checks?.find((c) => c.id === 'dangerous-off')?.status === 'fail');
     }
   } finally {
     child.kill('SIGTERM');
     await new Promise((r) => setTimeout(r, 300));
     delete process.env.DSH_DOUYIN_DATA_DIR;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// v0.4.0 review fixes: dispatch-level gates, no browser needed.
+{
+  const { runTool } = await import('./dsh-plugin.mjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-dispatch-'));
+  process.env.DSH_DOUYIN_DATA_DIR = tmp;
+  try {
+    const { saveConfig } = await import('./lib/config.mjs');
+    const { logAction } = await import('./lib/store.mjs');
+    saveConfig(tmp, { packages: { interact: { enabled: true }, discover: { enabled: true }, safety: { enabled: true } }, autoComment: { enabled: true, perDay: 3 }, commentMention: { enabled: true, perDay: 3, mentionName: '鱼' }, caps: { mentionPerDay: 3, totalOutwardPerDay: 20 } });
+    const r1 = await runTool('dy_reply_own_comments', {}, tmp);
+    check('dy_reply_own_comments is disabled pending rewrite (H2/H3)', r1.ok === false && r1.reason === 'disabled');
+    const r2 = await runTool('dy_comment', { videoId: 'v-1' }, tmp);
+    check('dy_comment without text is refused, not a crash (M2)', r2.ok === false && r2.error === 'missing-args');
+    const r3 = await runTool('dy_creator_videos', { url: 'http://127.0.0.1:3080/evil' }, tmp);
+    check('dy_creator_videos refuses non-douyin hosts (M9)', r3.ok === false && r3.error === 'bad-host');
+    const r4 = await runTool('dy_cleanup', {}, tmp);
+    check('dy_cleanup defaults to dry-run (M8)', r4.ok === true && r4.dryRun === true);
+    logAction(tmp, { type: 'mention', status: 'sent', videoId: 'v-9' });
+    const r5 = await runTool('dy_comment_mention', { videoId: 'v-9', text: '你好' }, tmp);
+    check('dy_comment_mention refuses a video already @-commented (M4)', r5.ok === false && r5.reason === 'duplicate');
+  } finally {
+    delete process.env.DSH_DOUYIN_DATA_DIR;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// Aurabot DM idempotency: sent or uncertain event IDs are never sent twice.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-dm-event-'));
+  const { logReply } = await import('./lib/store.mjs');
+  const { hasProcessedDmEvent } = await import('./lib/dm.mjs');
+  check('unseen DM event is eligible', hasProcessedDmEvent(tmp, 'event-1') === false);
+  logReply(tmp, { eventId: 'event-1', conversationId: 'conv-1', status: 'uncertain' });
+  check('uncertain DM event is deduplicated to avoid double-send', hasProcessedDmEvent(tmp, 'event-1') === true);
+  check('different DM event remains eligible', hasProcessedDmEvent(tmp, 'event-2') === false);
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// Aurabot bridge contract: verify the DSH tool's message field is translated
+// to the module's text field, the module response uses replyText, and DSH
+// still refuses to send to a conversation that is not explicitly allowed.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-aurabot-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { saveAllowed, readJsonl } = await import('./lib/store.mjs');
+  const { dataPaths } = await import('./lib/paths.mjs');
+  const { runTool } = await import('./dsh-plugin.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret', timeoutMs: 10000 } });
+  saveAllowed(tmp, [{ id: 'authorized-conv', name: 'Authorized', kind: 'dm' }]);
+  const originalFetch = globalThis.fetch;
+  let requestSeen = null;
+  try {
+    globalThis.fetch = async (url, options) => {
+      requestSeen = { url: String(url), options, body: JSON.parse(options.body) };
+      return { ok: false, status: 502, json: async () => ({ message: 'simulated Aurabot outage' }) };
+    };
+    const result = await runTool('dy_aurabot_reply', {
+      eventId: 'aurabot-event-1', conversationId: 'authorized-conv', senderId: 'sender-1', message: '你好',
+    }, tmp);
+    check('Aurabot tool maps DSH message to module text field', requestSeen?.body?.text === '你好');
+    check('Aurabot client calls the documented module route', requestSeen?.url === 'http://127.0.0.1:19090/aurabot/api/ext/douyin-bridge/message');
+    check('Aurabot outage is returned without attempting a browser send', result.ok === false && result.error === 'aurabot-http-error');
+    const inbound = readJsonl(path.join(dataPaths(tmp).dir, 'aurabot-inbound.jsonl'));
+    check('Aurabot generation failure is persisted for retry-safe idempotency', inbound.some((x) => x.eventId === 'aurabot-event-1' && x.status === 'generation-failed'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// Bridge health uses the configured timeout and documented health route.
+{
+  const { aurabotBridgeStatus } = await import('./lib/aurabot-bridge.mjs');
+  const originalFetch = globalThis.fetch;
+  let urlSeen = '';
+  try {
+    globalThis.fetch = async (url) => {
+      urlSeen = String(url);
+      return { ok: true, status: 200, json: async () => ({ ok: true, module: 'douyin-bridge' }) };
+    };
+    const result = await aurabotBridgeStatus({ aurabotBridge: { baseUrl: 'http://127.0.0.1:19090', token: 'test-secret', timeoutMs: 15000 } });
+    check('Aurabot health endpoint is reachable through the documented route', result.ok === true && urlSeen.endsWith('/aurabot/api/ext/douyin-bridge/health'));
+  } finally { globalThis.fetch = originalFetch; }
+}
+
+// The IM inspector is registered and exported; it is read-only and
+// does not expose message text or raw conversation identifiers in its output.
+{
+  const plugin = fs.readFileSync(path.join(ROOT, 'dsh-plugin.mjs'), 'utf8');
+  const browser = fs.readFileSync(path.join(ROOT, 'lib/browser.mjs'), 'utf8');
+  check('dy_dm_inspect tool is registered', plugin.includes("name: 'dy_dm_inspect'") && plugin.includes("case 'dy_dm_inspect'"));
+  check('browser exports the read-only IM DOM inspector', browser.includes('export async function inspectDmStructure'));
+  check('IM inspector redacts raw message content and IDs', browser.includes('hasMessageId: Boolean') && browser.includes('hasSenderId: Boolean') && browser.includes('privacy:'));
+  check('IM inspector preserves an already-open conversation', browser.includes('preservedOpenConversation') && browser.includes('current.pathname.startsWith(\'/im\')'));
+}
+
+// Contact opt-out is durable and has priority over the allowlist.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-optout-'));
+  const { saveAllowed, blockContact, isBlocked, canReply } = await import('./lib/store.mjs');
+  const { detectContactOptOut, handleContactOptOut } = await import('./lib/dm.mjs');
+  saveAllowed(tmp, [{ id: 'conv-optout', name: 'Contact', kind: 'dm' }]);
+  check('explicit opt-out wording is detected', detectContactOptOut('请不要再联系我，也不要再发私信。'));
+  check('English opt-out wording is detected', detectContactOptOut('Please do not contact me again.'));
+  const blocked = handleContactOptOut(tmp, { conversationId: 'conv-optout', text: '别联系我' });
+  check('opt-out is persisted as a blocklist entry', blocked?.blocked === true && isBlocked(tmp, 'conv-optout'));
+  const gate = canReply(tmp, 'conv-optout');
+  check('blocklist overrides allowlist permission', gate.ok === false && gate.reason === 'contact-blocked');
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+// Aurabot must not generate or send a reply after a clear opt-out.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-optout-bridge-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret' } });
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  try {
+    globalThis.fetch = async () => { called = true; throw new Error('must not call Aurabot after opt-out'); };
+    const result = await replyWithAurabot(tmp, (await import('./lib/config.mjs')).loadConfig(tmp), {
+      eventId: 'optout-event', conversationId: 'conv-stop', text: '请不要再联系我',
+    });
+    const { isBlocked } = await import('./lib/store.mjs');
+    check('opt-out stops before Aurabot API call', result.error === 'contact-opted-out' && called === false);
+    check('opt-out remains blocked after restart-safe persistence', isBlocked(tmp, 'conv-stop'));
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// Both documented Aurabot module install paths must remain identical and
+// syntactically valid; this catches API drift between the source and copyable folder.
+{
+  const { spawnSync } = await import('node:child_process');
+  const source = fs.readFileSync(path.join(ROOT, 'integrations/aurabot-module/index.mjs'), 'utf8');
+  const installable = fs.readFileSync(path.join(ROOT, 'integrations/aurabot-module/douyin-bridge/index.mjs'), 'utf8');
+  check('Aurabot source module and installable module folder stay in sync', source === installable);
+  for (const file of ['integrations/aurabot-module/index.mjs', 'integrations/aurabot-module/douyin-bridge/index.mjs']) {
+    const result = spawnSync(process.execPath, ['--check', path.join(ROOT, file)], { encoding: 'utf8' });
+    check('Aurabot module syntax: ' + file, result.status === 0, result.stderr || '');
+  }
+}
+
+// The installable Aurabot module folder must ship a module manifest, the same
+// way the douyin-plus module does; without it Aurabot has no id/version to list.
+{
+  let meta = null;
+  try { meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'integrations', 'aurabot-module', 'douyin-bridge', 'module.json'), 'utf8')); } catch { meta = null; }
+  check('Aurabot bridge module.json parses', meta !== null);
+  check('Aurabot bridge module.json id/version match the module', meta?.id === 'douyin-bridge' && meta?.version === '0.1.0' && meta?.api === 1);
+}
+
+
+// Aurabot must reject unauthorized incoming messages before sending their
+// contents to its model endpoint.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-aurabot-permission-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret' }, strangerReply: { enabled: false } });
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  try {
+    globalThis.fetch = async () => { called = true; throw new Error('unauthorized content must not reach Aurabot'); };
+    const result = await replyWithAurabot(tmp, (await import('./lib/config.mjs')).loadConfig(tmp), {
+      eventId: 'permission-event', conversationId: 'conv-not-allowed', text: 'private message',
+    });
+    check('unauthorized DM is rejected before model call', result.error === 'not-allowed' && called === false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// Concurrent duplicate deliveries of the same incoming event are serialized.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-aurabot-idempotency-'));
+  const { saveConfig } = await import('./lib/config.mjs');
+  const { saveAllowed } = await import('./lib/store.mjs');
+  const { replyWithAurabot } = await import('./lib/aurabot-send.mjs');
+  saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret' } });
+  saveAllowed(tmp, [{ id: 'conv-allowed', name: 'Allowed', kind: 'dm' }]);
+  const originalFetch = globalThis.fetch;
+  let release;
+  try {
+    globalThis.fetch = async () => new Promise((resolve) => {
+      release = () => resolve(new Response(JSON.stringify({ ok: false, message: 'simulated model outage' }), {
+        status: 502, headers: { 'content-type': 'application/json' },
+      }));
+    });
+    const config = (await import('./lib/config.mjs')).loadConfig(tmp);
+    const payload = { eventId: 'same-inbound-event', conversationId: 'conv-allowed', text: 'hello' };
+    const first = replyWithAurabot(tmp, config, payload);
+    await new Promise((resolve) => setImmediate(resolve));
+    const second = await replyWithAurabot(tmp, config, payload);
+    release();
+    const firstResult = await first;
+    check('same inbound event is rejected while first generation is in flight', second.duplicate === true && second.error === 'duplicate-in-flight');
+    check('model outage is recorded as a retryable generation failure', firstResult.error === 'aurabot-http-error');
+  } finally {
+    globalThis.fetch = originalFetch;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 }

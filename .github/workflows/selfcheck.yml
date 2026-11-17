@@ -1,0 +1,21 @@
+name: DSH plugin self-check
+
+on:
+  push:
+    branches:
+      - main
+      - release/v0.4.0-douyin-enhanced
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  selfcheck:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts
+      - run: npm test

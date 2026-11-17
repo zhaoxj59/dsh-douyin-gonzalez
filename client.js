@@ -1,4 +1,4 @@
-// DSH client half, v0.3.3 — 挂进 DSH 设置面板的正确写法。
+// DSH client half, v0.4.0 — 挂进 DSH 设置面板的正确写法。
 //
 // v0.3.2 用错了 API：ctx.get('@deepseek-ai/dsh-client-ui-settings-general')
 // + 旧写法里调的那几个方法在 DSH 里根本不存在，所以设置里
@@ -47,19 +47,27 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
         var busyState = useState(false);
         var busy = busyState[0];
         var setBusy = busyState[1];
+        // v0.4.0: 写接口要带设置服务 token。面板在回环源上时能从
+        // /api/token 取到；拿不到时写按钮提示去完整设置页操作。
+        var tokenState = useState(null);
+        var token = tokenState[0];
+        var setToken = tokenState[1];
 
         function load() {
           fetch(BASE + '/api/status').then(function (r) { return r.json(); }).then(setStatus).catch(function () { setStatus({ error: 'settings-off' }); });
           fetch(BASE + '/api/config').then(function (r) { return r.json(); }).then(setCfg).catch(function () { setCfg(null); });
+          fetch(BASE + '/api/token').then(function (r) { return r.json(); }).then(function (j) { setToken(j.token || ''); }).catch(function () { setToken(''); });
         }
         useEffect(load, []);
 
         function togglePkg(key) {
+          if (token === null) { setMsg('正在取设置服务 token…'); return; }
+          if (!token) { setMsg('拿不到设置服务 token（面板跨源被拦）：请点“打开完整设置页”在设置页里改开关。'); return; }
           if (!cfg || !cfg.packages) return;
           var next = JSON.parse(JSON.stringify(cfg));
           next.packages[key].enabled = !next.packages[key].enabled;
           setBusy(true);
-          fetch(BASE + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: next }) })
+          fetch(BASE + '/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Douyin-Token': token }, body: JSON.stringify({ config: next }) })
             .then(function (r) { return r.json(); })
             .then(function (res) { setMsg(res.ok ? '已自动保存 ' + new Date().toLocaleTimeString() : ('保存失败：' + (res.message || ''))); setCfg(next); })
             .catch(function (e) { setMsg('保存失败：' + e.message); })
@@ -67,17 +75,39 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
         }
 
         function runHealth() {
-          setBusy(true); setMsg('体检跑着呢…');
-          fetch(BASE + '/api/health', { method: 'POST' })
+          if (token === null) { setMsg('正在取设置服务 token…'); return; }
+          if (!token) { setMsg('拿不到设置服务 token（面板跨源被拦）：请点“打开完整设置页”，在设置页里跑体检。'); return; }
+          setBusy(true);
+          setMsg('体检跑着呢…');
+          fetch(BASE + '/api/health', { method: 'POST', headers: { 'X-Douyin-Token': token } })
             .then(function (r) { return r.json(); })
             .then(function (res) { setHealth(res); setMsg(''); })
             .catch(function (e) { setMsg('体检跑不起来：' + e.message + '（先确认设置服务在跑：npm run settings）'); })
             .finally(function () { setBusy(false); });
         }
 
+        function refreshStatus() {
+          // v0.4.1: “刷新状态”先真去 Edge 里探一次登录并存下来，再读状态；
+          // 以前只重读 config.json 里的旧值，登上后刷不回已登录。
+          if (token === null) { setMsg('正在取设置服务 token…'); return; }
+          if (!token) { setMsg('拿不到设置服务 token（面板跨源被拦）：请点“打开完整设置页”，在设置页里点“刷新列表”。'); return; }
+          setBusy(true); setMsg('正在重新探测登录状态…');
+          fetch(BASE + '/api/login/refresh', { method: 'POST', headers: { 'X-Douyin-Token': token } })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+              if (res.ok) setMsg(res.loggedIn ? '已登录。' : '抖音未登录：点“打开 Edge 登录抖音”扫码。');
+              else setMsg((res.message || '登录探测没跑起来') + '，显示的是上次的结果。');
+              load();
+            })
+            .catch(function (e) { setMsg('登录探测没跑起来：' + e.message + '，显示的是上次的结果。'); load(); })
+            .finally(function () { setBusy(false); });
+        }
+
         function openLogin() {
+          if (token === null) { setMsg('正在取设置服务 token…'); return; }
+          if (!token) { setMsg('拿不到设置服务 token（面板跨源被拦）：请点“打开完整设置页”，在设置页里点登录。'); return; }
           setBusy(true); setMsg('正在打开 Edge…');
-          fetch(BASE + '/api/login/open', { method: 'POST' })
+          fetch(BASE + '/api/login/open', { method: 'POST', headers: { 'X-Douyin-Token': token } })
             .then(function (r) { return r.json().then(function (j) { return { code: r.status, body: j }; }); })
             .then(function (pair) {
               if (pair.code === 200) setMsg('Edge 已打开，去扫码登录抖音；登上后回来点“刷新状态”。');
@@ -92,27 +122,30 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__) {
           var on = cfg.packages[key] && cfg.packages[key].enabled;
           return el('div', { key: key, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eee' } },
             el('span', null, pkgNames[key]),
-            el('button', { disabled: busy || key === 'core', onClick: function () { togglePkg(key); }, style: { padding: '4px 14px', borderRadius: 6, border: '1px solid #ccc', background: on ? '#16a34a' : '#fff', color: on ? '#fff' : '#333', cursor: 'pointer' } }, on ? '开' : '关'));
+            el('button', { disabled: busy || key === 'core', onClick: function () { togglePkg(key); }, style: { padding: '4px 0', width: 56, textAlign: 'center', borderRadius: 999, border: '1px solid ' + (on ? '#16a34a' : '#d1d5db'), background: on ? '#16a34a' : '#f3f4f6', color: on ? '#fff' : '#6b7280', cursor: 'pointer', fontWeight: 700 } }, on ? '开' : '关'));
         }) : null;
 
         return el('div', { style: { padding: 16, maxWidth: 640 } },
-          el('h2', { style: { margin: '0 0 8px' } }, '刷抖音（自写）v0.3.3'),
+          el('h2', { style: { margin: '0 0 8px' } }, '刷抖音（自写）v0.4.0'),
           el('p', { style: { color: '#666', margin: '0 0 12px' } }, '核心包常驻开；互动/发现/发片/安全默认关，开哪个再开哪个。危险动作（点赞/评论/分享）默认全关。'),
           status && status.error === 'settings-off'
-            ? el('p', { style: { color: '#b91c1c', background: '#fef2f2', padding: 10, borderRadius: 8 } }, '设置服务没跑：先在云电脑上进 C:\\dsh-douyin-gonzalez 跑 npm run settings，再刷新这个页面。')
+            ? el('p', { style: { color: '#b91c1c', background: '#fef2f2', padding: 10, borderRadius: 8 } }, '设置服务没跑：设置服务随插件自动起，先完全退出 DSH 再重开；还不行再进 C:\\dsh-douyin-gonzalez-v040 跑 npm run settings。')
             : null,
           status && !status.error
-            ? el('p', { style: { color: '#666' } }, '今天：回复 ' + (status.replies ? status.replies.total : 0) + ' 条私信；登录：' + (status.login && status.login.loggedIn ? '已登录' : '未登录'))
+            ? el('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', margin: '0 0 12px' } },
+              el('span', { style: { padding: '4px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700, background: (status.login && status.login.loggedIn) ? '#dcfce7' : '#fee2e2', color: (status.login && status.login.loggedIn) ? '#15803d' : '#b91c1c' } }, '登录：' + ((status.login && status.login.loggedIn) ? '已登录' : '未登录')),
+              el('span', { style: { padding: '4px 12px', borderRadius: 999, fontSize: 13, background: '#eff6ff', color: '#1d4ed8' } }, '今天：回复 ' + (status.replies ? status.replies.total : 0) + ' 条私信'))
             : null,
           el('div', null, pkgRows),
           el('div', { style: { display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' } },
             el('button', { disabled: busy, onClick: openLogin, style: { padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', cursor: 'pointer' } }, '打开 Edge 登录抖音'),
             el('button', { disabled: busy, onClick: runHealth, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '一键体检'),
-            el('button', { disabled: busy, onClick: load, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '刷新状态'),
+            el('button', { disabled: busy, onClick: refreshStatus, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '刷新状态'),
             el('button', { onClick: function () { window.open(BASE + '/', '_blank'); }, style: { padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' } }, '打开完整设置页')),
           msg ? el('p', { style: { marginTop: 12, color: '#333' } }, msg) : null,
           health ? el('p', { style: { marginTop: 12, color: health.failed ? '#b91c1c' : '#16a34a' } }, '体检：通过 ' + health.passed + ' / ' + health.total + ' 项' + (health.failed ? ('，不通过 ' + health.failed + ' 项，点“打开完整设置页”看每项原因。') : '，全通过。')) : null,
-          el('p', { style: { color: '#999', fontSize: 12, marginTop: 16 } }, '完整设置（5 个包全部开关、预算、选人勾选）仍在完整设置页：' + BASE + '/')
+          el('p', { style: { color: '#999', fontSize: 12, marginTop: 16 } }, '完整设置（5 个包全部开关、预算、选人勾选）仍在完整设置页：' + BASE + '/'),
+          el('p', { style: { color: '#999', fontSize: 12, marginTop: 4 } }, 'v0.4.0 · 预发布分支 release/v0.4.0-douyin-enhanced')
         );
       }
 
