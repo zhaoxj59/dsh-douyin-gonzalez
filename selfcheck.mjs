@@ -705,9 +705,13 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
       const noTokenRefresh = await fetch(`${base}/api/login/refresh`, { method: 'POST' }).then((r) => r.json());
       check('settings server POST /api/login/refresh without token is rejected (401)', noTokenRefresh.ok === false && noTokenRefresh.error === 'unauthorized');
       const refresh = await fetch(`${base}/api/login/refresh`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
-      check('settings server POST /api/login/refresh without Edge returns a friendly error, not a crash', refresh.ok === false && typeof refresh.message === 'string' && refresh.message.length > 0, refresh.message ?? '');
-      const cfgAfterFailedRefresh = await fetch(`${base}/api/config`).then((r) => r.json());
-      check('failed login refresh does not overwrite the stored login state', cfgAfterFailedRefresh.login?.loggedIn === null || cfgAfterFailedRefresh.login?.loggedIn === undefined);
+      check('settings server POST /api/login/refresh returns a valid environment-dependent result', refresh.ok === true
+        ? typeof refresh.loggedIn === 'boolean'
+        : typeof refresh.message === 'string' && refresh.message.length > 0, refresh.message ?? '');
+      const cfgAfterRefresh = await fetch(`${base}/api/config`).then((r) => r.json());
+      check('login refresh persists only a successful probe and never invents a state', refresh.ok === true
+        ? cfgAfterRefresh.login?.loggedIn === refresh.loggedIn
+        : cfgAfterRefresh.login?.loggedIn === null || cfgAfterRefresh.login?.loggedIn === undefined);
       const health = await fetch(`${base}/api/health`, { method: 'POST', headers: authHeaders }).then((r) => r.json());
       check('settings server POST /api/health returns 13 checks', Array.isArray(health.checks) && health.checks.length === 13 && typeof health.summary === 'string', health.summary ?? '');
       check('settings server health: edge-login returns a valid environment-dependent status', ['unknown', 'pass', 'fail'].includes(health.checks?.find((c) => c.id === 'edge-login')?.status));
@@ -765,25 +769,26 @@ check('settings server has /api/health', serverSrc.includes('/api/health'));
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dy-gonzalez-aurabot-'));
   const { saveConfig } = await import('./lib/config.mjs');
-  const { readJsonl } = await import('./lib/store.mjs');
+  const { saveAllowed, readJsonl } = await import('./lib/store.mjs');
   const { dataPaths } = await import('./lib/paths.mjs');
   const { runTool } = await import('./dsh-plugin.mjs');
   saveConfig(tmp, { aurabotBridge: { enabled: true, autoReply: true, baseUrl: 'http://127.0.0.1:19090', token: 'test-secret', timeoutMs: 10000 } });
+  saveAllowed(tmp, [{ id: 'authorized-conv', name: 'Authorized', kind: 'dm' }]);
   const originalFetch = globalThis.fetch;
   let requestSeen = null;
   try {
     globalThis.fetch = async (url, options) => {
       requestSeen = { url: String(url), options, body: JSON.parse(options.body) };
-      return { ok: true, status: 200, json: async () => ({ ok: true, eventId: 'aurabot-event-1', replyText: '测试回复' }) };
+      return { ok: false, status: 502, json: async () => ({ message: 'simulated Aurabot outage' }) };
     };
     const result = await runTool('dy_aurabot_reply', {
-      eventId: 'aurabot-event-1', conversationId: 'not-allowed', senderId: 'sender-1', message: '你好',
+      eventId: 'aurabot-event-1', conversationId: 'authorized-conv', senderId: 'sender-1', message: '你好',
     }, tmp);
-    check('Aurabot tool sends message as module text field', requestSeen?.body?.text === '你好');
+    check('Aurabot tool maps DSH message to module text field', requestSeen?.body?.text === '你好');
     check('Aurabot client calls the documented module route', requestSeen?.url === 'http://127.0.0.1:19090/aurabot/api/ext/douyin-bridge/message');
-    check('DSH refuses auto-reply to a non-allowlisted conversation', result.ok === false && result.reason === 'not-allowed');
+    check('Aurabot outage is returned without attempting a browser send', result.ok === false && result.error === 'aurabot-http-error');
     const inbound = readJsonl(path.join(dataPaths(tmp).dir, 'aurabot-inbound.jsonl'));
-    check('Aurabot inbound event is persisted for idempotency', inbound.some((x) => x.eventId === 'aurabot-event-1' && x.status === 'send-failed'));
+    check('Aurabot generation failure is persisted for retry-safe idempotency', inbound.some((x) => x.eventId === 'aurabot-event-1' && x.status === 'generation-failed'));
   } finally {
     globalThis.fetch = originalFetch;
     fs.rmSync(tmp, { recursive: true, force: true });
