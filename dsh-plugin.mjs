@@ -22,7 +22,7 @@ export const TOOL_DEFINITIONS = [
   // core (always on)
   { name: 'dy_watch', pkg: 'core', description: '在专用 Edge 里刷抖音一轮（默认 10 分钟），大肥鱼按人设 + 兴趣 + 观看历史自己选片，选片理由记进 watch-log.jsonl。需要先在 Edge 里手动登录抖音。', parameters: { type: 'object', properties: { minutes: { type: 'number', description: '本轮观看分钟数，默认 10' } } }, execute: 'watch' },
   { name: 'dy_list_chats', pkg: 'core', description: '读取抖音私信会话列表，写入本地 chats.json（好友互动页的勾选来源）。', parameters: { type: 'object', properties: {} }, execute: 'listChats' },
-  { name: 'dy_dm_inspect', pkg: 'core', description: '只读检查当前抖音私信页面的 DOM 结构；不导出昵称、私信正文、Cookie 或原始会话 ID，用于基于真实页面结构开发监听器。', parameters: { type: 'object', properties: {} }, execute: 'inspectDm' },
+  { name: 'dy_dm_inspect', pkg: 'core', description: '只读检查真实抖音私信 DOM；若当前已打开会话则保留页面，导出结构/语义属性/ID 是否存在，不导出昵称、正文、Cookie 或原始 ID。', parameters: { type: 'object', properties: {} }, execute: 'inspectDm' },
   { name: 'dy_dm_reply', pkg: 'core', description: '给一个已许可会话回一条私信。只回 allowed.json 里勾选过的会话；每人每天上限、全天上限按 config.json；发送结果不明时不自动重发。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReply' },
   { name: 'dy_dm_reply_stranger', pkg: 'core', description: '给一个陌生人回一条私信。只有在设置页显式打开“陌生人私信回复”开关时才可用，有独立的每日上限（默认 3 条），和白名单回复分开计数。默认关闭。', parameters: { type: 'object', properties: { conversationId: { type: 'string' }, text: { type: 'string' } }, required: ['conversationId', 'text'] }, execute: 'dmReplyStranger' },
   { name: 'dy_aurabot_status', pkg: 'core', description: '检查 DSH 到 Aurabot 的 API 连接状态；不会暴露桥接密钥。', parameters: { type: 'object', properties: {} }, execute: 'aurabotStatus' },
