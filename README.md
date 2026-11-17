@@ -75,12 +75,14 @@ v0.3.2 的面板挂接调了 DSH 里不存在的方法，设置里什么都没�
 
 **包关了 = 那个包的工具直接拒绝（`package-disabled`），不加载、不跑定时器。** 想用哪个包，先在设置页打开它的总开关，再开里面的小开关。
 
-## 功能（36 个工具）
+## 功能（37 个工具）
 
 | 包 | 工具 | 说明 |
 |---|---|---|
 | 核心 | `dy_watch` | 专用 Edge 刷抖音一轮（默认 10 分钟），大肥鱼自己选片，记录到 `watch-log.jsonl` |
 | 核心 | `dy_list_chats` | 读私信会话，写入 `chats.json`（选人页的勾选来源） |
+| 核心 | `dy_dm_inspect` | 只读诊断当前私信页 DOM 结构；保留已打开会话，不导出正文或原始 ID |
+| 核心 | `dy_aurabot_status` / `dy_aurabot_reply` / `dy_aurabot_proactive` | 检查 Aurabot API、手动触发 Aurabot 回复、生成并发送经 DSH 权限/额度校验的主动私信 |
 | 核心 | `dy_dm_reply` / `dy_dm_reply_stranger` | 只回 `allowed.json` 里勾选过的会话 / 回陌生人（单独开关，独立上限） |
 | 核心 | `dy_daily_report` | 从本地记录生成 Markdown 日报，不额外调模型 |
 | 核心 | `dy_astrbot_status` | 查看 AstrBot 桥的状态和今日计数 |
@@ -281,7 +283,13 @@ DSH 仍是独立抖音插件；Aurabot 只作为 AI 回复服务，不迁移 DSH
 - DSH 设置页：桥接开关、Aurabot 服务 Origin、共享密钥、自动回复和主动联系开关。
 - Aurabot 通过 `api.think()` 使用现有人格与记忆生成回复；只有 DSH 执行抖音消息发送。
 
-### 安装 Aurabot 模块
+### 一键整合安装（Windows 预览版）
+
+仓库根目录提供 `install-all.ps1`，可同时安装 DSH 独立插件和 Aurabot 用户模块；更新使用 `update-all.ps1`。安装前会备份代码目录，不会删除 DSH 数据目录或 Aurabot 人格/记忆。若检测到同 ID 的现有 Aurabot 模块与本包不同，默认停止，只有显式传入 `-ReplaceExistingBridge` 才会替换。
+
+**自动收件监听尚未完成**，所以该安装包目前提供的是桥接与手动回复工具，不是“新私信自动进来就自动回复”的已验收整合版。
+
+### 手动安装 Aurabot 模块
 
 将 `integrations/aurabot-module/douyin-bridge/` 整个目录复制到：
 
@@ -305,7 +313,7 @@ DSH 设置里的服务地址只填 DSH Web Server 的 Origin（协议 + 主机 +
 
 本轮进一步修正了 DSH 工具参数到 Aurabot 模块 `text` 字段的映射、主动私信响应 `replyText` 的读取，以及入站/出站发送时将 `eventId` 交给 DSH 私信日志去重；设置页新增“测试 Aurabot 连接”按钮，健康检查走 `/aurabot/api/ext/douyin-bridge/health`。自检增加了桥接 payload、健康路由和非许可联系人拒绝发送的覆盖。
 
-此提交完成 API 客户端、Aurabot 用户模块、DSH 手动工具调用和设置入口。**抖音私信列表目前只能读取会话列表，现有浏览器层尚未实现可靠的未读消息正文/发送者识别与后台轮询**，因此不能把这一步误称为“收到私信就自动回复已完成”。自动收件箱轮询、事件去重与实机 DOM 验证是下一阶段；未验证前不会伪造收到消息或发送成功。
+当前分支已补强：入站消息先由 DSH 检查白名单/陌生人开关/拒绝联系黑名单，再交给 Aurabot；同一事件加并发锁并区分生成失败、发送中、已发送和不确定状态；发送全局串行化以避免并发越过总额度。只读 DOM 检查器会保留已打开的私信会话并输出脱敏结构线索。**自动收件监听仍未完成**：未读状态、消息正文、发送者和消息级稳定 ID 尚未基于真实登录页面验证，也没有持续轮询；因此不能把这一步误称为“收到私信就自动回复已完成”。
 
 ## AstrBot 互通（v0.2.0，第 7 项，v0.3.0 不变）
 
