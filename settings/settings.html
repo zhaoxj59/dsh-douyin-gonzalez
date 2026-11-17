@@ -144,14 +144,14 @@
   </div>
   <div class="section"><h2>回私信 · 每日次数</h2>
     <div class="field"><label>白名单私信：每天最多</label> <input type="number" id="cfg-caps-dmReplyPerDay" min="0" max="50" value="5"> 条，每人每天 <input type="number" id="cfg-caps-dmReplyPerContactPerDay" min="0" max="10" value="1"> 条</div>
-    <p class="muted">AI 回复由 Aurabot 负责；DSH 负责收发、权限、去重和额度。开启后无需逐条人工确认。</p>
+    <p class="muted">AI 回复由 Aurabot 负责；DSH 负责收发、权限、去重和额度。当前预览版尚未接入自动收件轮询，现阶段需手动调用回复工具；完成真实页面验证后才会启用无人值守自动回复。</p>
     <div class="field"><label><input type="checkbox" id="cfg-strangerReply-enabled"> 允许自动回复非白名单联系人</label> 每天最多 <input type="number" id="cfg-strangerReply-perDay" min="0" max="20" value="3"> 条</div>
   </div>
   <div class="section"><h2>🧠 Aurabot 智能私信桥接</h2>
     <div class="field"><label><input type="checkbox" id="cfg-aurabotBridge-enabled"> 启用 Aurabot API 桥接</label></div>
     <div class="field"><label>Aurabot 服务地址</label> <input class="wide" type="text" id="cfg-aurabotBridge-baseUrl" value="" placeholder="http://127.0.0.1:端口"></div>
     <div class="field"><label>桥接密钥</label> <input class="wide" type="password" id="cfg-aurabotBridge-token" placeholder="与 Aurabot douyin-bridge 模块设置中的密钥一致"></div>
-    <div class="field"><label><input type="checkbox" id="cfg-aurabotBridge-autoReply"> 自动回复（Aurabot 生成，DSH 自动发送）</label></div>
+    <div class="field"><label><input type="checkbox" id="cfg-aurabotBridge-autoReply"> 自动回复（监听器上线后由 Aurabot 生成、DSH 发送；当前尚未接入自动收件轮询）</label></div>
     <div class="field"><label><input type="checkbox" id="cfg-aurabotBridge-autoProactive"> 允许主动私信（无逐条人工确认）</label></div>
     <div class="field"><button id="aurabotBridgeTestBtn" type="button">测试 Aurabot 连接</button><span id="aurabotBridgeTestResult" class="muted">尚未测试</span></div>
     <p class="muted">远程地址必须使用 HTTPS；本机可使用 HTTP。未配置密钥或连接失败时不会发送。连接测试只检查 Aurabot 模块健康状态，不会发送私信。主动联系仍受联系人权限、每日额度和停止联系要求约束。</p>
